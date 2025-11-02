@@ -17,6 +17,9 @@ class CredentialResponse(CredentialBase):
     id: int
     device_id: str
     created_at: datetime
+    is_duplicate: Optional[bool] = False
+    duplicate_count: Optional[int] = 0
+    duplicate_ids: Optional[List[int]] = []
     
     class Config:
         from_attributes = True

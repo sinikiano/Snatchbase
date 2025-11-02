@@ -116,7 +116,10 @@ class SearchService:
         # Apply ordering and pagination for results
         credentials = base_query.order_by(desc(Credential.created_at)).offset(offset).limit(limit).all()
         
-        return [CredentialResponse.from_orm(cred) for cred in credentials], total
+        # Enrich with duplicate information
+        enriched_credentials = self._enrich_credentials_with_duplicates(db, credentials)
+        
+        return enriched_credentials, total
     
     def search_systems(
         self,
@@ -379,3 +382,31 @@ class SearchService:
         ).limit(limit).all()
         
         return [{"software_name": name, "device_count": count} for name, count in results]
+    
+    def _enrich_credentials_with_duplicates(self, db: Session, credentials: List[Credential]) -> List[CredentialResponse]:
+        """Enrich credentials with duplicate detection information"""
+        enriched = []
+        
+        for cred in credentials:
+            # Find duplicates: same username + password in the same device
+            duplicates = db.query(Credential).filter(
+                and_(
+                    Credential.device_id == cred.device_id,
+                    Credential.username == cred.username,
+                    Credential.password == cred.password,
+                    Credential.id != cred.id  # Exclude self
+                )
+            ).all()
+            
+            # Convert to response model
+            cred_response = CredentialResponse.from_orm(cred)
+            
+            # Add duplicate information
+            if duplicates:
+                cred_response.is_duplicate = True
+                cred_response.duplicate_count = len(duplicates)
+                cred_response.duplicate_ids = [d.id for d in duplicates]
+            
+            enriched.append(cred_response)
+        
+        return enriched

@@ -420,6 +420,75 @@ async def get_software_stats(limit: int = 20, db: Session = Depends(get_db)):
     """Get software statistics"""
     return search_service.get_software_statistics(db, limit)
 
+@app.post("/credentials/remove-duplicates")
+async def remove_duplicates(
+    device_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Remove duplicate credentials (keep oldest, remove newer ones)"""
+    from sqlalchemy import func
+    
+    try:
+        # Build base query
+        if device_id:
+            duplicates_query = db.query(
+                Credential.device_id,
+                Credential.username,
+                Credential.password,
+                func.count(Credential.id).label('count'),
+                func.min(Credential.id).label('keep_id')
+            ).filter(
+                Credential.device_id == device_id
+            ).group_by(
+                Credential.device_id,
+                Credential.username,
+                Credential.password
+            ).having(func.count(Credential.id) > 1)
+        else:
+            duplicates_query = db.query(
+                Credential.device_id,
+                Credential.username,
+                Credential.password,
+                func.count(Credential.id).label('count'),
+                func.min(Credential.id).label('keep_id')
+            ).group_by(
+                Credential.device_id,
+                Credential.username,
+                Credential.password
+            ).having(func.count(Credential.id) > 1)
+        
+        duplicates = duplicates_query.all()
+        
+        total_removed = 0
+        for dup in duplicates:
+            # Find all credentials with this username+password in this device
+            all_creds = db.query(Credential).filter(
+                and_(
+                    Credential.device_id == dup.device_id,
+                    Credential.username == dup.username,
+                    Credential.password == dup.password
+                )
+            ).all()
+            
+            # Delete all except the oldest (keep_id)
+            for cred in all_creds:
+                if cred.id != dup.keep_id:
+                    db.delete(cred)
+                    total_removed += 1
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "duplicate_groups_found": len(duplicates),
+            "credentials_removed": total_removed,
+            "message": f"Removed {total_removed} duplicate credentials from {len(duplicates)} groups"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
