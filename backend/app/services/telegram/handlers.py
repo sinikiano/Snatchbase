@@ -1,0 +1,137 @@
+"""
+File upload and message handlers for Telegram bot
+"""
+import re
+from telegram import Update
+from telegram.ext import ContextTypes
+from app.database import SessionLocal
+from app.services.zip_ingestion import ZipIngestionService
+from .config import logger, ALLOWED_USER_ID, UPLOAD_DIR
+from .utils import get_back_button
+from .mega_download import download_mega_file
+
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle file uploads"""
+    user_id = update.effective_user.id
+    
+    # Check authorization
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("⛔ Unauthorized access denied.")
+        logger.warning(f"Unauthorized file upload attempt from user {user_id}")
+        return
+    
+    document = update.message.document
+    file_name = document.file_name
+    
+    # Only accept ZIP files
+    if not file_name.lower().endswith('.zip'):
+        await update.message.reply_text(
+            "❌ Only ZIP files are accepted!\n"
+            "Please send a ZIP file containing stealer logs.",
+            reply_markup=get_back_button()
+        )
+        return
+    
+    try:
+        # Send processing message
+        processing_msg = await update.message.reply_text(
+            f"⏳ Downloading `{file_name}`...",
+            parse_mode='Markdown'
+        )
+        
+        # Download file
+        file = await context.bot.get_file(document.file_id)
+        file_path = UPLOAD_DIR / file_name
+        await file.download_to_drive(file_path)
+        
+        logger.info(f"Downloaded file: {file_name} ({document.file_size} bytes)")
+        
+        # Update message
+        await processing_msg.edit_text(
+            f"✅ Downloaded `{file_name}`\n"
+            f"⏳ Processing ZIP file...",
+            parse_mode='Markdown'
+        )
+        
+        # Process the ZIP file
+        db = SessionLocal()
+        try:
+            ingestion_service = ZipIngestionService(logger=logger)
+            result = ingestion_service.process_zip_file(file_path, db)
+            
+            if result['success']:
+                # Delete ZIP file after successful processing
+                if file_path.exists():
+                    file_path.unlink()
+                    logger.info(f"Deleted processed ZIP file: {file_name}")
+                
+                # Send success message
+                await processing_msg.edit_text(
+                    f"✅ *Processing Complete*\n\n"
+                    f"📦 File: `{file_name}`\n"
+                    f"🖥️ Devices: {result['devices_processed']}\n"
+                    f"🔑 Credentials: {result['total_credentials']}\n"
+                    f"📄 Files: {result['total_files']}\n"
+                    f"🗑️ ZIP file deleted",
+                    parse_mode='Markdown',
+                    reply_markup=get_back_button()
+                )
+                
+                logger.info(
+                    f"Successfully processed {file_name}: "
+                    f"{result['devices_processed']} devices, "
+                    f"{result['total_credentials']} credentials"
+                )
+            else:
+                await processing_msg.edit_text(
+                    f"❌ *Processing Failed*\n\n"
+                    f"File: `{file_name}`\n"
+                    f"Error: Processing unsuccessful",
+                    parse_mode='Markdown',
+                    reply_markup=get_back_button()
+                )
+                logger.error(f"Failed to process {file_name}")
+                
+        except Exception as e:
+            logger.error(f"Error processing {file_name}: {str(e)}", exc_info=True)
+            await processing_msg.edit_text(
+                f"❌ *Error Processing File*\n\n"
+                f"File: `{file_name}`\n"
+                f"Error: {str(e)}",
+                parse_mode='Markdown',
+                reply_markup=get_back_button()
+            )
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error handling document: {str(e)}", exc_info=True)
+        await update.message.reply_text(
+            f"❌ Error downloading file: {str(e)}",
+            reply_markup=get_back_button()
+        )
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle text messages, including Mega.nz links"""
+    user_id = update.effective_user.id
+    
+    if user_id != ALLOWED_USER_ID:
+        return
+    
+    message_text = update.message.text
+    
+    # Check if message contains a Mega.nz link
+    mega_pattern = r'https?://mega\.nz/[^\s]+'
+    mega_links = re.findall(mega_pattern, message_text)
+    
+    if mega_links:
+        for link in mega_links:
+            await download_mega_file(update, link)
+    else:
+        await update.message.reply_text(
+            "📎 Please send me a ZIP file containing stealer logs or a Mega.nz link.\n"
+            "Use /status to check the bot status.",
+            reply_markup=get_back_button()
+        )
