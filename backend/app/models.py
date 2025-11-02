@@ -14,7 +14,7 @@ class Device(Base):
     device_name_hash = Column(String(64), nullable=False, index=True)
     hostname = Column(String(255), index=True)  # Actual hostname from System.txt
     ip_address = Column(String(50), index=True)  # IP Address from System.txt
-    country = Column(String(10), index=True)  # Country code from System.txt
+    country = Column(String(100), index=True)  # Country code from System.txt
     language = Column(String(50))  # Language from System.txt
     os_version = Column(String(255))  # OS Version from System.txt
     username = Column(String(255))  # Username from System.txt

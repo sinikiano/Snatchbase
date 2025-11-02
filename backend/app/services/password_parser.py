@@ -91,8 +91,8 @@ class PasswordFileParser:
         for line in lines:
             trimmed_line = line.strip()
             
-            # Empty line signals end of credential block
-            if not trimmed_line:
+            # Empty line or separator (=====, _____, -----) signals end of credential block
+            if not trimmed_line or (len(set(trimmed_line)) == 1 and trimmed_line[0] in "=_-|"):
                 if self._is_valid_credential(current_credential):
                     url_info = self._extract_url_info(current_credential["url"])
                     result.credentials.append(
@@ -123,20 +123,16 @@ class PasswordFileParser:
         # Add the last credential if valid
         if self._is_valid_credential(current_credential):
             url_info = self._extract_url_info(current_credential["url"])
-            url = current_credential["url"]
-            domain = url_info["domain"][:500] if url_info["domain"] else None
-            tld = url_info["tld"][:50] if url_info["tld"] else None
-            username = current_credential["username"][:500] if current_credential["username"] else None
-            password = current_credential["password"]
-            browser_name = current_credential.get("browser")[:200] if current_credential.get("browser") else None
-            result.credentials.append({
-                'url': url,
-                'domain': domain,
-                'tld': tld,
-                'username': username,
-                'password': password,
-                'browser': browser_name
-            })
+            result.credentials.append(
+                Credential(
+                    url=current_credential["url"],
+                    domain=url_info["domain"],
+                    tld=url_info["tld"],
+                    username=current_credential["username"],
+                    password=current_credential["password"],
+                    browser=current_credential.get("browser"),
+                )
+            )
         
         return result
     
