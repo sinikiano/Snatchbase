@@ -7,6 +7,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from pathlib import Path
+from app.services.address_derivation import get_address_derivation
 
 logger = logging.getLogger(__name__)
 
@@ -210,12 +211,35 @@ class WalletParser:
         if 'mnemonic' in data and wallet_type == 'unknown':
             wallet_type = 'multi'
         
+        # Derive address from mnemonic if not present
+        address = data.get('address')
+        mnemonic = data.get('mnemonic')
+        
+        if mnemonic and not address:
+            try:
+                derivation = get_address_derivation()
+                # Try to derive address based on wallet type from filename
+                if 'metamask' in filename.lower() or 'okx' in filename.lower():
+                    address = derivation.derive_eth_address(mnemonic)
+                    wallet_type = 'Metamask' if 'metamask' in filename.lower() else 'OKX'
+                elif 'phantom' in filename.lower():
+                    address = derivation.derive_sol_address(mnemonic)
+                    wallet_type = 'Phantom'
+                else:
+                    # Default to Ethereum for unknown types
+                    address = derivation.derive_eth_address(mnemonic)
+                
+                if address:
+                    logger.info(f"Derived address for {wallet_type}: {address[:10]}...")
+            except Exception as e:
+                logger.warning(f"Failed to derive address from mnemonic: {e}")
+        
         return WalletInfo(
             wallet_type=wallet_type,
-            mnemonic=data.get('mnemonic'),
+            mnemonic=mnemonic,
             private_key=data.get('private_key'),
             password=data.get('password'),
-            address=data.get('address'),
+            address=address,
             path=data.get('path'),
             source_file=filename
         )

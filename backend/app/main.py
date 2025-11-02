@@ -120,6 +120,47 @@ async def search_credentials(
         "offset": offset
     }
 
+@app.get("/search/export")
+async def export_credentials(
+    q: Optional[str] = None,
+    domain: Optional[str] = None,
+    username: Optional[str] = None,
+    browser: Optional[str] = None,
+    tld: Optional[str] = None,
+    stealer_name: Optional[str] = None,
+    limit: int = 10000,
+    db: Session = Depends(get_db)
+):
+    """Export credentials as email:password text file"""
+    from fastapi.responses import PlainTextResponse
+    
+    results, total = search_service.search_credentials_with_count(
+        db=db,
+        query=q,
+        domain=domain,
+        username=username,
+        browser=browser,
+        tld=tld,
+        stealer_name=stealer_name,
+        limit=limit,
+        offset=0
+    )
+    
+    # Format as email:password (results are Pydantic objects)
+    lines = []
+    for cred in results:
+        if cred.username and cred.password:
+            lines.append(f"{cred.username}:{cred.password}")
+    
+    content = "\n".join(lines)
+    
+    return PlainTextResponse(
+        content=content,
+        headers={
+            "Content-Disposition": f"attachment; filename=credentials_export.txt"
+        }
+    )
+
 @app.get("/search/systems")
 async def search_systems(
     q: Optional[str] = None,
