@@ -211,6 +211,12 @@ class WalletBalanceChecker:
             if not wallet_ids:
                 return {
                     "total": 0,
+                    "checked": 0,
+                    "success": 0,
+                    "failed": 0,
+                    "with_balance": 0,
+                    "total_value_usd": Decimal(0),
+                    "results": [],
                     "message": "No unchecked wallets found"
                 }
             
@@ -246,6 +252,12 @@ class WalletBalanceChecker:
             if not wallet_ids:
                 return {
                     "total": 0,
+                    "checked": 0,
+                    "success": 0,
+                    "failed": 0,
+                    "with_balance": 0,
+                    "total_value_usd": Decimal(0),
+                    "results": [],
                     "message": f"No wallets older than {hours} hours found"
                 }
             
@@ -278,6 +290,12 @@ class WalletBalanceChecker:
             if not wallet_ids:
                 return {
                     "total": 0,
+                    "checked": 0,
+                    "success": 0,
+                    "failed": 0,
+                    "with_balance": 0,
+                    "total_value_usd": Decimal(0),
+                    "results": [],
                     "message": "No wallets with balance found"
                 }
             
