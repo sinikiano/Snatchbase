@@ -94,10 +94,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             "📤 *SEND FILES*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "Send me ZIP files containing stealer logs and I'll:\n"
-            "✅ Process and extract credentials\n"
-            "✅ Save to database\n"
-            "✅ Delete the ZIP file automatically\n"
+            "Send me ZIP files or Mega.nz links with logs:\n"
+            "✅ Upload ZIP files directly\n"
+            "✅ Paste Mega.nz download links\n"
+            "✅ Auto-process and extract credentials\n"
+            "✅ Auto-delete ZIP files after processing\n"
         )
         
         await update.message.reply_text(message, parse_mode='Markdown')
@@ -459,16 +460,98 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle text messages"""
+    """Handle text messages, including Mega.nz links"""
     user_id = update.effective_user.id
     
     if user_id != ALLOWED_USER_ID:
         return
     
-    await update.message.reply_text(
-        "📎 Please send me a ZIP file containing stealer logs.\n"
-        "Use /status to check the bot status."
-    )
+    message_text = update.message.text
+    
+    # Check if message contains a Mega.nz link
+    import re
+    mega_pattern = r'https?://mega\.nz/[^\s]+'
+    mega_links = re.findall(mega_pattern, message_text)
+    
+    if mega_links:
+        for link in mega_links:
+            await download_mega_file(update, link)
+    else:
+        await update.message.reply_text(
+            "📎 Please send me a ZIP file containing stealer logs or a Mega.nz link.\n"
+            "Use /status to check the bot status."
+        )
+
+
+async def download_mega_file(update: Update, mega_url: str):
+    """Download file from Mega.nz link"""
+    try:
+        # Send initial message
+        status_msg = await update.message.reply_text(
+            f"🔗 Detected Mega.nz link!\n"
+            f"⏬ Starting download..."
+        )
+        
+        # Generate unique filename for download
+        import time
+        timestamp = int(time.time())
+        temp_filename = f"mega_{timestamp}"
+        download_path = os.path.join(UPLOAD_DIR, temp_filename)
+        
+        # Download using megatools
+        logger.info(f"Downloading from Mega.nz: {mega_url}")
+        
+        # Run megadl command
+        import subprocess
+        process = subprocess.Popen(
+            ['megadl', '--path', UPLOAD_DIR, '--no-progress', mega_url],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        stdout, stderr = process.communicate()
+        
+        if process.returncode != 0:
+            error_msg = stderr.strip() if stderr else "Unknown error"
+            logger.error(f"Mega download failed: {error_msg}")
+            await status_msg.edit_text(
+                f"❌ Download failed!\n"
+                f"Error: {error_msg}"
+            )
+            return
+        
+        # Find the downloaded file (megadl uses original filename)
+        # Get the newest file in upload directory
+        files = [f for f in os.listdir(UPLOAD_DIR) if os.path.isfile(os.path.join(UPLOAD_DIR, f))]
+        if not files:
+            await status_msg.edit_text("❌ Download failed! No file found.")
+            return
+        
+        # Get the most recently modified file
+        newest_file = max(files, key=lambda f: os.path.getmtime(os.path.join(UPLOAD_DIR, f)))
+        file_path = os.path.join(UPLOAD_DIR, newest_file)
+        file_size = os.path.getsize(file_path)
+        file_size_mb = file_size / (1024 * 1024)
+        
+        logger.info(f"Downloaded: {newest_file} ({file_size_mb:.2f} MB)")
+        
+        # Update status message
+        await status_msg.edit_text(
+            f"✅ Download complete!\n\n"
+            f"📁 File: {newest_file}\n"
+            f"📊 Size: {file_size_mb:.2f} MB\n\n"
+            f"🔄 The file will be automatically processed by the ingestion service.\n"
+            f"⏱️ Processing time depends on file size."
+        )
+        
+        logger.info(f"Mega.nz file downloaded successfully: {newest_file}")
+        
+    except Exception as e:
+        logger.error(f"Error downloading Mega.nz file: {str(e)}")
+        await update.message.reply_text(
+            f"❌ Error downloading file:\n{str(e)}"
+        )
 
 
 def main():
