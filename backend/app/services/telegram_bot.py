@@ -6,8 +6,8 @@ import os
 import logging
 import asyncio
 from pathlib import Path
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from sqlalchemy import func
 from app.database import SessionLocal
 from app.models import Credential, Device, Upload
@@ -27,6 +27,81 @@ UPLOAD_DIR = Path(os.getenv('UPLOAD_DIR', 'backend/data/incoming/uploads'))
 
 # Ensure upload directory exists
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_back_button():
+    """Create inline keyboard with back to main button"""
+    keyboard = [[InlineKeyboardButton("🏠 Back to Main", callback_data="back_to_main")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle button callbacks"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "back_to_main":
+        # Show main menu by editing the message
+        user_id = query.from_user.id
+        
+        if user_id != ALLOWED_USER_ID:
+            await query.edit_message_text("⛔ Unauthorized access denied.")
+            return
+        
+        # Get database statistics
+        db = SessionLocal()
+        try:
+            # Get total counts
+            total_credentials = db.query(func.count(Credential.id)).scalar() or 0
+            total_systems = db.query(func.count(Device.device_id)).scalar() or 0
+            total_uploads = db.query(func.count(Upload.upload_id)).scalar() or 0
+            
+            # Get unique domains count
+            unique_domains = db.query(func.count(func.distinct(Credential.domain))).scalar() or 0
+            
+            # Count pending ZIP files
+            zip_files = list(UPLOAD_DIR.glob("*.zip"))
+            
+            # Build comprehensive message
+            message = (
+                "🤖 *Snatchbase Log Processor Bot*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                "📊 *DATABASE STATISTICS*\n"
+                f"🔑 Total Credentials: {total_credentials:,}\n"
+                f"🖥️ Total Systems: {total_systems:,}\n"
+                f"📦 Total Uploads: {total_uploads:,}\n"
+                f"🌐 Unique Domains: {unique_domains:,}\n"
+                f"📁 Pending Files: {len(zip_files)}\n\n"
+                
+                "⚙️ *COMMANDS*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "/start - Show statistics\n"
+                "/status - Check bot status\n"
+                "/topdomains - View top domains\n"
+                "/extractdomains - Extract credentials from target domains\n\n"
+                
+                "📤 *SEND FILES*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Send me ZIP files or Mega.nz links with logs:\n"
+                "✅ Upload ZIP files directly\n"
+                "✅ Paste Mega.nz download links\n"
+                "✅ Auto-process and extract credentials\n"
+                "✅ Auto-delete ZIP files after processing\n"
+            )
+            
+            await query.edit_message_text(message, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error getting statistics: {str(e)}", exc_info=True)
+            await query.edit_message_text(
+                "🤖 *Snatchbase Log Processor Bot*\n\n"
+                "Send me ZIP files or Mega.nz links!",
+                parse_mode='Markdown'
+            )
+        finally:
+            db.close()
+
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -115,7 +190,8 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📁 Upload Directory: `{UPLOAD_DIR}`\n"
         f"📦 ZIP Files Pending: {len(zip_files)}\n"
         f"🤖 Status: Active",
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=get_back_button()
     )
 
 
@@ -162,12 +238,16 @@ async def top100_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_parts.append(current_message)
         
         # Send all message parts
-        for part in message_parts:
-            await update.message.reply_text(part, parse_mode='Markdown')
+        for i, part in enumerate(message_parts):
+            # Add back button only to the last message
+            if i == len(message_parts) - 1:
+                await update.message.reply_text(part, parse_mode='Markdown', reply_markup=get_back_button())
+            else:
+                await update.message.reply_text(part, parse_mode='Markdown')
             
     except Exception as e:
         logger.error(f"Error getting top domains: {str(e)}", exc_info=True)
-        await update.message.reply_text(f"❌ Error retrieving top domains: {str(e)}")
+        await update.message.reply_text(f"❌ Error retrieving top domains: {str(e)}", reply_markup=get_back_button())
     finally:
         db.close()
 
@@ -315,7 +395,7 @@ async def extractdomains_command(update: Update, context: ContextTypes.DEFAULT_T
         for domain, count in sorted_domains:
             summary += f"• {domain}: {count:,}\n"
         
-        await update.message.reply_text(summary, parse_mode='Markdown')
+        await update.message.reply_text(summary, parse_mode='Markdown', reply_markup=get_back_button())
         
         # Send the file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -336,7 +416,7 @@ async def extractdomains_command(update: Update, context: ContextTypes.DEFAULT_T
         
     except Exception as e:
         logger.error(f"Error extracting domains: {str(e)}", exc_info=True)
-        await update.message.reply_text(f"❌ Error extracting credentials: {str(e)}")
+        await update.message.reply_text(f"❌ Error extracting credentials: {str(e)}", reply_markup=get_back_button())
     finally:
         db.close()
 
@@ -403,7 +483,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"🔑 Credentials: {result['total_credentials']}\n"
                     f"📄 Files: {result['total_files']}\n"
                     f"🗑️ ZIP file deleted",
-                    parse_mode='Markdown'
+                    parse_mode='Markdown',
+                    reply_markup=get_back_button()
                 )
                 
                 logger.info(
@@ -416,7 +497,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"❌ *Processing Failed*\n\n"
                     f"File: `{file_name}`\n"
                     f"Error: Processing unsuccessful",
-                    parse_mode='Markdown'
+                    parse_mode='Markdown',
+                    reply_markup=get_back_button()
                 )
                 logger.error(f"Failed to process {file_name}")
                 
@@ -426,7 +508,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ *Error Processing File*\n\n"
                 f"File: `{file_name}`\n"
                 f"Error: {str(e)}",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=get_back_button()
             )
         finally:
             db.close()
@@ -434,7 +517,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error handling document: {str(e)}", exc_info=True)
         await update.message.reply_text(
-            f"❌ Error downloading file: {str(e)}"
+            f"❌ Error downloading file: {str(e)}",
+            reply_markup=get_back_button()
         )
 
 
@@ -458,7 +542,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(
             "📎 Please send me a ZIP file containing stealer logs or a Mega.nz link.\n"
-            "Use /status to check the bot status."
+            "Use /status to check the bot status.",
+            reply_markup=get_back_button()
         )
 
 
@@ -549,14 +634,15 @@ async def download_mega_file(update: Update, mega_url: str):
             logger.error(f"Mega download failed: {error_msg}")
             await status_msg.edit_text(
                 f"❌ Download failed!\n"
-                f"Error: {error_msg}"
+                f"Error: {error_msg}",
+                reply_markup=get_back_button()
             )
             return
         
         # Find the downloaded file
         files = [f for f in os.listdir(UPLOAD_DIR) if os.path.isfile(os.path.join(UPLOAD_DIR, f))]
         if not files:
-            await status_msg.edit_text("❌ Download failed! No file found.")
+            await status_msg.edit_text("❌ Download failed! No file found.", reply_markup=get_back_button())
             return
         
         # Get the most recently modified file
@@ -577,7 +663,8 @@ async def download_mega_file(update: Update, mega_url: str):
             f"⚡ Avg Speed: {avg_speed:.2f} MB/s\n"
             f"⏱️ Total Time: {total_time}s\n\n"
             f"🔄 The file will be automatically processed by the ingestion service.\n"
-            f"⏳ Processing time depends on file size."
+            f"⏳ Processing time depends on file size.",
+            reply_markup=get_back_button()
         )
         
         logger.info(f"Mega.nz file downloaded successfully: {newest_file}")
@@ -585,7 +672,8 @@ async def download_mega_file(update: Update, mega_url: str):
     except Exception as e:
         logger.error(f"Error downloading Mega.nz file: {str(e)}", exc_info=True)
         await update.message.reply_text(
-            f"❌ Error downloading file:\n{str(e)}"
+            f"❌ Error downloading file:\n{str(e)}",
+            reply_markup=get_back_button()
         )
 
 
@@ -612,6 +700,7 @@ def main():
     application.add_handler(CommandHandler("top100", top100_command))
     application.add_handler(CommandHandler("topdomains", top100_command))  # Alias for top100
     application.add_handler(CommandHandler("extractdomains", extractdomains_command))
+    application.add_handler(CallbackQueryHandler(button_callback))  # Handle button clicks
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
