@@ -5,12 +5,13 @@ A modern stealer log search engine and aggregator
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import func, and_
 from typing import List, Optional
 from pathlib import Path
 import logging
 
 from app.database import get_db, engine
-from app.models import Base
+from app.models import Base, Credential
 from app.schemas import CredentialResponse, SystemResponse
 from app.services.search_service import SearchService
 from app.services.file_watcher import FileWatcherService
@@ -426,8 +427,6 @@ async def remove_duplicates(
     db: Session = Depends(get_db)
 ):
     """Remove duplicate credentials (keep oldest, remove newer ones)"""
-    from sqlalchemy import func
-    
     try:
         # Build base query
         if device_id:
