@@ -17,11 +17,13 @@ const activityVariants = {
 }
 
 export default function RecentActivity() {
-  const { data: recentCredentials, isLoading } = useQuery(
+  const { data: recentData, isLoading } = useQuery(
     'recent-credentials',
     () => searchCredentials({ limit: 10 }),
     { refetchInterval: 30000 } // Refresh every 30 seconds
   )
+
+  const recentCredentials = recentData?.results || []
 
   const getActivityIcon = (stealer?: string) => {
     if (stealer?.toLowerCase().includes('redline')) return Shield
@@ -95,7 +97,7 @@ export default function RecentActivity() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center space-x-2 mb-1">
                 <p className="text-sm font-medium text-white truncate">
-                  {credential.domain || credential.host || 'Unknown domain'}
+                  {credential.domain || credential.url || 'Unknown domain'}
                 </p>
                 {credential.stealer_name && (
                   <span className="px-2 py-1 text-xs bg-primary-500/20 text-primary-400 rounded-full">
@@ -105,7 +107,7 @@ export default function RecentActivity() {
               </div>
               
               <p className="text-xs text-dark-400 truncate">
-                {credential.username || 'No username'} • {credential.software || 'Unknown software'}
+                {credential.username || 'No username'} • {credential.browser || 'Unknown browser'}
               </p>
             </div>
             

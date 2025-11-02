@@ -21,6 +21,7 @@ export interface Credential {
   browser?: string
   file_path?: string
   device_id?: string
+  stealer_name?: string
   created_at: string
 }
 
