@@ -109,6 +109,36 @@ export default function SearchNew() {
     toast.success('Exported to CSV')
   }
 
+  const exportTxt = async () => {
+    try {
+      // Build query params
+      const params = new URLSearchParams()
+      if (searchQuery) params.append('q', searchQuery)
+      if (filters.domain) params.append('domain', filters.domain)
+      if (filters.username) params.append('username', filters.username)
+      if (filters.browser) params.append('browser', filters.browser)
+      if (filters.tld) params.append('tld', filters.tld)
+      if (filters.stealer_name) params.append('stealer_name', filters.stealer_name)
+      params.append('limit', '10000') // Export up to 10k results
+      
+      // Fetch from export endpoint
+      const response = await fetch(`http://localhost:8000/search/export?${params.toString()}`)
+      if (!response.ok) throw new Error('Export failed')
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `credentials-${Date.now()}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Exported to TXT (email:password format)')
+    } catch (error) {
+      console.error('Export failed:', error)
+      toast.error('Export failed')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 p-8">
       {/* Header */}
@@ -278,6 +308,14 @@ export default function SearchNew() {
             >
               {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               {showPasswords ? 'Hide' : 'Show'} Passwords
+            </button>
+            
+            <button
+              onClick={exportTxt}
+              className="px-4 py-2 bg-primary-600/20 hover:bg-primary-600/30 text-primary-400 border border-primary-500/30 rounded-xl transition-all flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export TXT
             </button>
             
             <button
