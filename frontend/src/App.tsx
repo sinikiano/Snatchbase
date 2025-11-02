@@ -7,6 +7,7 @@ import DevicesPage from './pages/DevicesPage'
 import DeviceDetail from './pages/DeviceDetail'
 import AnalyticsNew from './pages/AnalyticsNew'
 import ApiDocs from './pages/ApiDocs'
+import TopDomainsPage from './pages/TopDomainsPage'
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
           <Route path="/devices" element={<DevicesPage />} />
           <Route path="/device/:deviceId" element={<DeviceDetail />} />
           <Route path="/analytics" element={<AnalyticsNew />} />
+          <Route path="/topdomains" element={<TopDomainsPage />} />
           <Route path="/api" element={<ApiDocs />} />
         </Routes>
       </main>
