@@ -32,7 +32,7 @@ fi
 
 # Check Telegram Bot
 echo -n "Telegram Bot: "
-if ps aux | grep "run_telegram_bot.py" | grep -v grep > /dev/null; then
+if ps aux | grep "telegram_bot" | grep -v grep > /dev/null; then
     echo -e "${GREEN}✓ Running${NC}"
     BOT_RUNNING=1
 else
