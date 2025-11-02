@@ -49,6 +49,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "/start - Show statistics\n"
             "/status - Check bot status\n"
+            "/stats - Database analytics\n"
+            "/recent - Recent activity (24h/7d/30d)\n"
+            "/search - Search credentials\n"
             "/topdomains - View top domains\n"
             "/extractdomains - Extract credentials from target domains\n\n"
             

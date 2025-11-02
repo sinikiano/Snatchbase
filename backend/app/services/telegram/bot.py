@@ -10,6 +10,8 @@ from .commands import start_command, status_command, top100_command
 from .extractdomains import extractdomains_command
 from .handlers import handle_document, handle_message
 from .callbacks import button_callback
+from .search import search_command
+from .analytics import stats_command, recent_command
 
 
 def main():
@@ -32,6 +34,9 @@ def main():
     # Add command handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("recent", recent_command))
+    application.add_handler(CommandHandler("search", search_command))
     application.add_handler(CommandHandler("top100", top100_command))
     application.add_handler(CommandHandler("topdomains", top100_command))  # Alias for top100
     application.add_handler(CommandHandler("extractdomains", extractdomains_command))
