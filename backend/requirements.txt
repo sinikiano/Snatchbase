@@ -16,7 +16,7 @@ watchdog>=3.0.0
 python-magic>=0.4.27
 
 # Telegram integration
-telethon>=1.41.0
+python-telegram-bot>=21.0
 
 # Wallet balance checking
 aiohttp>=3.9.0
