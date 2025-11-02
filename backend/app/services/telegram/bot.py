@@ -12,6 +12,7 @@ from .handlers import handle_document, handle_message
 from .callbacks import button_callback
 from .search import search_command
 from .analytics import stats_command, recent_command
+from .wallet_commands import wallets_command, checkwallets_command, highvalue_command, checkbalances_command
 
 
 def main():
@@ -37,6 +38,10 @@ def main():
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("recent", recent_command))
     application.add_handler(CommandHandler("search", search_command))
+    application.add_handler(CommandHandler("wallets", wallets_command))
+    application.add_handler(CommandHandler("checkwallets", checkwallets_command))
+    application.add_handler(CommandHandler("checkbalances", checkbalances_command))
+    application.add_handler(CommandHandler("highvalue", highvalue_command))
     application.add_handler(CommandHandler("top100", top100_command))
     application.add_handler(CommandHandler("topdomains", top100_command))  # Alias for top100
     application.add_handler(CommandHandler("extractdomains", extractdomains_command))
