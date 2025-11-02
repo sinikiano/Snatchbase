@@ -49,24 +49,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Get unique domains count
         unique_domains = db.query(func.count(func.distinct(Credential.domain))).scalar() or 0
         
-        # Get top 100 domains
-        top_domains = db.query(
-            Credential.domain,
-            func.count(Credential.id).label('count')
-        ).group_by(
-            Credential.domain
-        ).order_by(
-            func.count(Credential.id).desc()
-        ).limit(100).all()
-        
-        # Format top domains list
-        top_domains_text = ""
-        for i, (domain, count) in enumerate(top_domains[:20], 1):  # Show top 20 in message
-            top_domains_text += f"{i}. {domain} - {count:,}\n"
-        
-        if len(top_domains) > 20:
-            top_domains_text += f"\n... and {len(top_domains) - 20} more domains"
-        
         # Count pending ZIP files
         zip_files = list(UPLOAD_DIR.glob("*.zip"))
         
@@ -82,15 +64,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🌐 Unique Domains: {unique_domains:,}\n"
             f"📁 Pending Files: {len(zip_files)}\n\n"
             
-            "📈 *TOP 20 DOMAINS*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{top_domains_text}\n"
-            
             "⚙️ *COMMANDS*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "/start - Show statistics\n"
             "/status - Check bot status\n"
-            "/top100 - Show top 100 domains\n\n"
+            "/topdomains - View top domains\n"
+            "/extractdomains - Extract credentials from target domains\n\n"
             
             "📤 *SEND FILES*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -631,6 +610,7 @@ def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("top100", top100_command))
+    application.add_handler(CommandHandler("topdomains", top100_command))  # Alias for top100
     application.add_handler(CommandHandler("extractdomains", extractdomains_command))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
