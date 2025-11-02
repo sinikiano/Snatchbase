@@ -93,6 +93,11 @@ class ZipIngestionService:
                 # Group files by device
                 device_map, structure_info = self.grouper.group_by_device(zip_file)
                 
+                # Handle nested ZIP files (ZIP containing ZIPs)
+                if structure_info.structure_type == "nested":
+                    self.logger.info(f"📦 Detected nested ZIP structure - extracting inner ZIPs...")
+                    return self._process_nested_zips(zip_file, zip_path, upload_batch, upload, db)
+                
                 self.logger.info(f"📊 Found {len(device_map)} devices in ZIP")
                 
                 # Check for existing devices
@@ -163,6 +168,115 @@ class ZipIngestionService:
             upload.error_message = str(e)
             db.commit()
             raise
+    
+    def _process_nested_zips(self, outer_zip: zipfile.ZipFile, zip_path: Path, upload_batch: str, upload: Upload, db: Session) -> Dict:
+        """Process a ZIP file containing inner ZIP files"""
+        import tempfile
+        import shutil
+        
+        temp_dir = None
+        try:
+            # Create temporary directory for extracting inner ZIPs
+            temp_dir = tempfile.mkdtemp(prefix="snatchbase_nested_")
+            self.logger.info(f"📂 Created temp directory: {temp_dir}")
+            
+            # Find all .zip files in the outer ZIP
+            inner_zips = [entry for entry in outer_zip.filelist if entry.filename.lower().endswith('.zip') and not entry.is_dir()]
+            self.logger.info(f"📦 Found {len(inner_zips)} inner ZIP files")
+            
+            devices_processed = 0
+            devices_skipped = 0
+            total_credentials = 0
+            total_files = 0
+            device_names_found = []
+            
+            # Process each inner ZIP
+            for inner_zip_entry in inner_zips:
+                try:
+                    # Extract inner ZIP to temp directory
+                    inner_zip_name = Path(inner_zip_entry.filename).name
+                    device_names_found.append(inner_zip_name)
+                    inner_zip_path = Path(temp_dir) / inner_zip_name
+                    
+                    with open(inner_zip_path, 'wb') as f:
+                        f.write(outer_zip.read(inner_zip_entry))
+                    
+                    self.logger.info(f"📦 Extracting inner ZIP: {inner_zip_name}")
+                    
+                    # Process the inner ZIP as a regular device ZIP
+                    with zipfile.ZipFile(inner_zip_path, 'r') as inner_zip_file:
+                        # Group files by device within this inner ZIP
+                        device_map, _ = self.grouper.group_by_device(inner_zip_file)
+                        
+                        # Check for existing devices
+                        existing_hashes = self._get_existing_device_hashes(db, list(device_map.keys()))
+                        
+                        # Process each device in the inner ZIP
+                        for device_name, files in device_map.items():
+                            device_hash = compute_device_hash(device_name)
+                            
+                            # Skip if device already exists
+                            if device_hash in existing_hashes:
+                                self.logger.info(f"⏭️ Skipping duplicate device: {device_name} (from {inner_zip_name})")
+                                devices_skipped += 1
+                                continue
+                            
+                            self.logger.info(f"🖥️ Processing device: {device_name} from {inner_zip_name} ({len(files)} files)")
+                            
+                            # Process device
+                            device_stats = self._process_device(
+                                db=db,
+                                device_name=device_name,
+                                device_hash=device_hash,
+                                files=files,
+                                upload_batch=upload_batch,
+                                zip_file=inner_zip_file
+                            )
+                            
+                            devices_processed += 1
+                            total_credentials += device_stats["credentials"]
+                            total_files += device_stats["files"]
+                            
+                            # Commit after each device
+                            db.commit()
+                            self.logger.info(f"✅ Device processed: {device_name}")
+                    
+                    # Delete the inner ZIP after processing
+                    inner_zip_path.unlink()
+                    
+                except Exception as e:
+                    self.logger.error(f"❌ Error processing inner ZIP {inner_zip_entry.filename}: {e}", exc_info=True)
+                    continue
+            
+            # Update upload record
+            upload.status = "completed"
+            upload.devices_found = len(device_names_found)
+            upload.devices_processed = devices_processed
+            upload.devices_skipped = devices_skipped
+            upload.total_credentials = total_credentials
+            upload.total_files = total_files
+            upload.completed_at = datetime.now()
+            db.commit()
+            
+            result = {
+                "success": True,
+                "upload_batch": upload_batch,
+                "devices_found": len(device_names_found),
+                "devices_processed": devices_processed,
+                "devices_skipped": devices_skipped,
+                "total_credentials": total_credentials,
+                "total_files": total_files,
+                "structure_type": "nested",
+            }
+            
+            self.logger.info(f"✅ Nested ZIP processing completed: {result}")
+            return result
+            
+        finally:
+            # Clean up temp directory
+            if temp_dir and Path(temp_dir).exists():
+                shutil.rmtree(temp_dir)
+                self.logger.info(f"🗑️ Cleaned up temp directory")
     
     def _get_existing_device_hashes(self, db: Session, device_names: List[str]) -> set:
         """Get hashes of existing devices to avoid duplicates"""
