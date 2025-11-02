@@ -5,9 +5,31 @@ import os
 import subprocess
 import asyncio
 import time
+from concurrent.futures import ThreadPoolExecutor
 from telegram import Update
 from .config import logger, UPLOAD_DIR
 from .utils import get_back_button
+
+# Thread pool for running blocking operations
+_executor = ThreadPoolExecutor(max_workers=3)
+
+
+def _run_megadl_download(mega_url: str, upload_dir: str) -> tuple:
+    """Run megadl in a separate thread (blocking operation)"""
+    try:
+        process = subprocess.Popen(
+            ['megadl', '--path', upload_dir, '--print-names', mega_url],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate(timeout=600)  # 10 minute timeout
+        return process.returncode, stdout, stderr
+    except subprocess.TimeoutExpired:
+        process.kill()
+        return -1, "", "Download timeout (10 minutes exceeded)"
+    except Exception as e:
+        return -1, "", str(e)
 
 
 async def download_mega_file(update: Update, mega_url: str):
@@ -16,78 +38,81 @@ async def download_mega_file(update: Update, mega_url: str):
         # Send initial message
         status_msg = await update.message.reply_text(
             f"🔗 Detected Mega.nz link!\n"
-            f"⏬ Starting download..."
+            f"⏬ Starting download in background..."
         )
         
         # Download using megatools with progress
         logger.info(f"Downloading from Mega.nz: {mega_url}")
         
-        # Start megadl process with progress enabled
-        process = subprocess.Popen(
-            ['megadl', '--path', str(UPLOAD_DIR), '--print-names', mega_url],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
+        # Start download in background thread
+        loop = asyncio.get_event_loop()
+        download_task = loop.run_in_executor(
+            _executor,
+            _run_megadl_download,
+            mega_url,
+            str(UPLOAD_DIR)
         )
         
-        # Track download progress
+        # Track download progress while task runs
         start_time = time.time()
         last_update = 0
-        filename = None
         
         # Monitor download progress
-        while process.poll() is None:
+        while not download_task.done():
             current_time = time.time()
             
             # Update every 10 seconds
             if current_time - last_update >= 10:
-                # Find the newest file being downloaded
-                files = [f for f in os.listdir(UPLOAD_DIR) if os.path.isfile(os.path.join(UPLOAD_DIR, f))]
-                
-                if files:
-                    # Get the most recently modified file
-                    newest_file = max(files, key=lambda f: os.path.getmtime(os.path.join(UPLOAD_DIR, f)))
-                    file_path = os.path.join(UPLOAD_DIR, newest_file)
+                try:
+                    # Find the newest file being downloaded
+                    files = [f for f in os.listdir(UPLOAD_DIR) 
+                            if os.path.isfile(os.path.join(UPLOAD_DIR, f)) 
+                            and not f.startswith('.')]
                     
-                    # Check if file was modified recently (within last 15 seconds)
-                    file_mtime = os.path.getmtime(file_path)
-                    if current_time - file_mtime < 15:
-                        current_size = os.path.getsize(file_path)
-                        current_size_mb = current_size / (1024 * 1024)
-                        elapsed = int(current_time - start_time)
+                    if files:
+                        # Get the most recently modified file
+                        newest_file = max(files, key=lambda f: os.path.getmtime(os.path.join(UPLOAD_DIR, f)))
+                        file_path = os.path.join(UPLOAD_DIR, newest_file)
                         
-                        # Calculate download speed
-                        speed_mbps = current_size_mb / elapsed if elapsed > 0 else 0
-                        
-                        # Create progress bar
-                        progress_bar = "▓" * min(20, int(current_size_mb / 10)) + "░" * max(0, 20 - int(current_size_mb / 10))
-                        
-                        # Update message
-                        try:
-                            await status_msg.edit_text(
-                                f"🔗 Downloading from Mega.nz\n\n"
-                                f"📁 File: {newest_file}\n"
-                                f"📊 Downloaded: {current_size_mb:.2f} MB\n"
-                                f"⚡ Speed: {speed_mbps:.2f} MB/s\n"
-                                f"⏱️ Time: {elapsed}s\n\n"
-                                f"[{progress_bar}]\n\n"
-                                f"⏳ Download in progress..."
-                            )
-                            filename = newest_file
-                        except Exception as e:
-                            # Ignore errors during message edit (rate limit, etc.)
-                            logger.debug(f"Error updating progress: {str(e)}")
-                        
-                        last_update = current_time
+                        # Check if file was modified recently
+                        file_mtime = os.path.getmtime(file_path)
+                        if current_time - file_mtime < 15:
+                            current_size = os.path.getsize(file_path)
+                            current_size_mb = current_size / (1024 * 1024)
+                            elapsed = int(current_time - start_time)
+                            
+                            # Calculate download speed
+                            speed_mbps = current_size_mb / elapsed if elapsed > 0 else 0
+                            
+                            # Create progress bar
+                            progress_bar = "▓" * min(20, int(current_size_mb / 10)) + "░" * max(0, 20 - int(current_size_mb / 10))
+                            
+                            # Update message
+                            try:
+                                await status_msg.edit_text(
+                                    f"🔗 Downloading from Mega.nz\n\n"
+                                    f"📁 File: {newest_file}\n"
+                                    f"📊 Downloaded: {current_size_mb:.2f} MB\n"
+                                    f"⚡ Speed: {speed_mbps:.2f} MB/s\n"
+                                    f"⏱️ Time: {elapsed}s\n\n"
+                                    f"[{progress_bar}]\n\n"
+                                    f"⏳ Download in progress..."
+                                )
+                            except Exception as e:
+                                logger.debug(f"Error updating progress: {str(e)}")
+                            
+                            last_update = current_time
+                except Exception as e:
+                    logger.debug(f"Error checking download progress: {str(e)}")
             
             # Sleep briefly to avoid busy waiting
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
         
-        # Get process output
-        stdout, stderr = process.communicate()
+        # Get the result from the background task
+        returncode, stdout, stderr = await download_task
         
-        if process.returncode != 0:
+        # Check if download failed
+        if returncode != 0:
             error_msg = stderr.strip() if stderr else "Unknown error"
             logger.error(f"Mega download failed: {error_msg}")
             await status_msg.edit_text(
@@ -98,7 +123,14 @@ async def download_mega_file(update: Update, mega_url: str):
             return
         
         # Find the downloaded file
-        files = [f for f in os.listdir(UPLOAD_DIR) if os.path.isfile(os.path.join(UPLOAD_DIR, f))]
+        try:
+            files = [f for f in os.listdir(UPLOAD_DIR) 
+                    if os.path.isfile(os.path.join(UPLOAD_DIR, f)) 
+                    and not f.startswith('.')]
+        except Exception as e:
+            logger.error(f"Error listing download directory: {str(e)}")
+            files = []
+            
         if not files:
             await status_msg.edit_text("❌ Download failed! No file found.", reply_markup=get_back_button())
             return
