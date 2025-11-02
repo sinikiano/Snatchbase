@@ -14,6 +14,7 @@ from app.models import Base
 from app.schemas import CredentialResponse, SystemResponse
 from app.services.search_service import SearchService
 from app.services.file_watcher import FileWatcherService
+from app.routers import wallets
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -32,6 +33,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(wallets.router, prefix="/api", tags=["wallets"])
 
 search_service = SearchService()
 

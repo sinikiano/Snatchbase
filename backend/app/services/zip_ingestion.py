@@ -9,7 +9,7 @@ from typing import Optional, Dict, List
 from sqlalchemy.orm import Session
 from collections import defaultdict
 
-from app.models import Device, Credential, File, PasswordStat, Software, Upload
+from app.models import Device, Credential, File, PasswordStat, Software, Upload, Wallet
 from app.services.zip_processor import (
     ZipStructureAnalyzer, 
     ZipFileGrouper, 
@@ -19,6 +19,7 @@ from app.services.zip_processor import (
 from app.services.password_parser import PasswordFileParser, escape_password
 from app.services.software_parser import SoftwareFileParser
 from app.services.system_parser import SystemFileParser
+from app.services.wallet_parser import WalletParser
 
 
 def sanitize_text(text: Optional[str]) -> Optional[str]:
@@ -68,6 +69,7 @@ class ZipIngestionService:
         self.password_parser = PasswordFileParser()
         self.software_parser = SoftwareFileParser()
         self.system_parser = SystemFileParser()
+        self.wallet_parser = WalletParser()
     
     def process_zip_file(self, zip_path: Path, db: Session) -> Dict:
         """Process a ZIP file and ingest all data"""
@@ -393,6 +395,59 @@ class ZipIngestionService:
                 self.logger.error(f"❌ Error saving software: {e}")
                 continue
         
+        # Parse and save wallets
+        self.logger.info(f"🔍 Searching for wallet files")
+        wallet_files = [
+            (path, entry) for path, entry in files
+            if self.wallet_parser.is_wallet_file(Path(path).name) and not entry.is_dir()
+        ]
+        
+        self.logger.info(f"💰 Found {len(wallet_files)} wallet files")
+        all_wallets = []
+        
+        for path, entry in wallet_files:
+            try:
+                content = zip_file.read(entry).decode('utf-8', errors='ignore')
+                wallets = self.wallet_parser.parse_wallet_file(content, Path(path).name)
+                
+                for wallet in wallets:
+                    # Hash sensitive data
+                    from hashlib import sha256
+                    mnemonic_hash = sha256(wallet.mnemonic.encode()).hexdigest() if wallet.mnemonic else None
+                    private_key_hash = sha256(wallet.private_key.encode()).hexdigest() if wallet.private_key else None
+                    
+                    all_wallets.append({
+                        "wallet_type": wallet.wallet_type,
+                        "address": wallet.address,
+                        "mnemonic_hash": mnemonic_hash,
+                        "private_key_hash": private_key_hash,
+                        "password": wallet.password,
+                        "path": wallet.path or path,
+                        "source_file": wallet.source_file or Path(path).name,
+                    })
+                
+            except Exception as e:
+                self.logger.error(f"❌ Error parsing wallet file {path}: {e}")
+                continue
+        
+        self.logger.info(f"💾 Saving {len(all_wallets)} wallets")
+        for wallet_data in all_wallets:
+            try:
+                wallet = Wallet(
+                    device_id=device_id,
+                    wallet_type=sanitize_text(wallet_data["wallet_type"]),
+                    address=sanitize_text(wallet_data.get("address")),
+                    mnemonic_hash=wallet_data.get("mnemonic_hash"),
+                    private_key_hash=wallet_data.get("private_key_hash"),
+                    password=sanitize_text(wallet_data.get("password")),
+                    path=sanitize_text(wallet_data.get("path")),
+                    source_file=sanitize_text(wallet_data.get("source_file")),
+                )
+                db.add(wallet)
+            except Exception as e:
+                self.logger.error(f"❌ Error saving wallet: {e}")
+                continue
+        
         # Save file tree (text files only)
         self.logger.info(f"💾 Saving file tree ({len(files)} entries)")
         file_count = 0
@@ -437,4 +492,5 @@ class ZipIngestionService:
             "credentials": len(all_credentials),
             "files": file_count,
             "software": len(all_software),
+            "wallets": len(all_wallets),
         }

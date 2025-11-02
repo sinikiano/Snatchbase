@@ -1,5 +1,5 @@
 """Database models for stealer log data"""
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Index, Boolean, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -34,6 +34,7 @@ class Device(Base):
     files = relationship("File", back_populates="device", cascade="all, delete-orphan")
     password_stats = relationship("PasswordStat", back_populates="device", cascade="all, delete-orphan")
     software = relationship("Software", back_populates="device", cascade="all, delete-orphan")
+    wallets = relationship("Wallet", back_populates="device", cascade="all, delete-orphan")
     
     # Indexes
     __table_args__ = (
@@ -170,3 +171,35 @@ class System(Base):
     log_date = Column(String(50))
     upload_id = Column(String(255), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Wallet(Base):
+    """Wallet model - stores cryptocurrency wallet data"""
+    __tablename__ = "wallets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True)
+    wallet_type = Column(String(50), nullable=False, index=True)  # BTC, ETH, MATIC, etc.
+    address = Column(String(255), index=True)  # Wallet address
+    mnemonic_hash = Column(String(64), index=True)  # SHA256 hash of mnemonic (never store plaintext)
+    private_key_hash = Column(String(64), index=True)  # SHA256 hash of private key
+    password = Column(Text)  # Wallet password if available
+    path = Column(Text)  # File path where wallet was found
+    source_file = Column(String(500))  # Name of the wallet file
+    balance = Column(Numeric(precision=36, scale=18), default=0)  # Wallet balance in native currency
+    balance_usd = Column(Numeric(precision=20, scale=2))  # Balance in USD
+    last_checked = Column(DateTime(timezone=True))  # Last time balance was checked
+    has_balance = Column(Boolean, default=False, index=True)  # Quick filter for wallets with money
+    token_balances = Column(Text)  # JSON string of token balances
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship
+    device = relationship("Device", back_populates="wallets")
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_wallet_address', 'address'),
+        Index('idx_wallet_type', 'wallet_type'),
+        Index('idx_has_balance', 'has_balance'),
+        Index('idx_device_wallet', 'device_id', 'wallet_type'),
+    )

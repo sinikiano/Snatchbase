@@ -18,5 +18,8 @@ python-magic>=0.4.27
 # Telegram integration
 telethon>=1.41.0
 
+# Wallet balance checking
+aiohttp>=3.9.0
+
 # Note: MEGA downloads use system 'megatools' package
 # Install with: sudo apt install megatools
