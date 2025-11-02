@@ -91,7 +91,7 @@ class WalletParser:
             line = line.strip()
             
             # Skip empty lines and separators
-            if not line or set(line) == {'=', '_', '-', '|'}:
+            if not line or set(line).issubset({'=', '_', '-', '|', ' '}):
                 if current_wallet:
                     wallet = self._create_wallet_from_dict(current_wallet, filename)
                     if wallet:

@@ -434,7 +434,7 @@ class ZipIngestionService:
         for wallet_data in all_wallets:
             try:
                 wallet = Wallet(
-                    device_id=device_id,
+                    device_id=device.id,  # Use device.id (integer PK) not device_id (string)
                     wallet_type=sanitize_text(wallet_data["wallet_type"]),
                     address=sanitize_text(wallet_data.get("address")),
                     mnemonic_hash=wallet_data.get("mnemonic_hash"),
