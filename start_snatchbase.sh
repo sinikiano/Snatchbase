@@ -27,11 +27,27 @@ print_error() {
     echo -e "${RED}[✗]${NC} $1"
 }
 
+# Function to stop all services
+stop_all() {
+    print_status "Stopping all services..."
+    pkill -f "uvicorn app.main:app" 2>/dev/null
+    pkill -f "vite" 2>/dev/null
+    pkill -f "run_telegram_bot.py" 2>/dev/null
+    sleep 2
+    print_success "All services stopped"
+}
+
+# Trap to cleanup on exit
+trap stop_all EXIT INT TERM
+
 # Check if we're in the right directory
 if [ ! -f "backend/app/main.py" ]; then
     print_error "Please run this script from the Snatchbase root directory"
     exit 1
 fi
+
+# Stop any running services first
+stop_all
 
 # Create necessary directories
 print_status "Creating necessary directories..."
