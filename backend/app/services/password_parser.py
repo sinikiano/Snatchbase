@@ -39,11 +39,28 @@ class PasswordFileParser:
         "passwords.txt",
         "allpasswords_list.txt",
         "_allpasswords_list",
+        "password.txt",
+        "pass.txt",
+        "all_pass.txt",
+        "all pass.txt",
+        "password_list.txt",
+        "passlist.txt",
+        "creds.txt",
+        "credentials.txt",
+        "logins.txt",
+        "login.txt",
+        "accounts.txt",
     }
     
     def is_password_file(self, filename: str) -> bool:
         """Check if filename is a password file"""
-        return filename.lower() in self.PASSWORD_FILE_NAMES
+        filename_lower = filename.lower()
+        # Check exact match first
+        if filename_lower in self.PASSWORD_FILE_NAMES:
+            return True
+        # Check if filename contains common password keywords
+        password_keywords = ["password", "pass", "login", "cred", "account"]
+        return any(keyword in filename_lower for keyword in password_keywords) and filename_lower.endswith('.txt')
     
     def parse_password_file(self, content: str) -> PasswordFileStats:
         """Parse password file content and extract credentials"""

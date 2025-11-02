@@ -238,13 +238,21 @@ class ZipIngestionService:
             except Exception as e:
                 self.logger.error(f"❌ Error parsing system file: {e}")
         
+        # Debug: Log all .txt files in the device
+        txt_files = [(path, Path(path).name) for path, entry in files if Path(path).name.lower().endswith('.txt') and not entry.is_dir()]
+        if txt_files:
+            self.logger.info(f"📄 Found {len(txt_files)} .txt files in device: {[name for _, name in txt_files[:10]]}")
+        
         # Find password files
         password_files = [
             (path, entry) for path, entry in files
             if self.password_parser.is_password_file(Path(path).name) and not entry.is_dir()
         ]
         
-        self.logger.info(f"🔍 Found {len(password_files)} password files")
+        if password_files:
+            self.logger.info(f"🔍 Found {len(password_files)} password files: {[Path(p).name for p, _ in password_files]}")
+        else:
+            self.logger.info(f"🔍 Found {len(password_files)} password files")
         
         # Parse credentials
         all_credentials = []
