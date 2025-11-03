@@ -2,6 +2,7 @@
 Blockchain API integrations for wallet balance checking
 Supports multiple chains: BTC, ETH, MATIC, BNB, etc.
 """
+import os
 import aiohttp
 import asyncio
 from typing import Optional, Dict, Any
@@ -78,7 +79,11 @@ class EthereumAPI(BlockchainAPI):
     
     BASE_URL = "https://api.etherscan.io/api"
     
-    async def get_balance(self, address: str, api_key: Optional[str] = None) -> Dict[str, Any]:
+    def __init__(self):
+        super().__init__()
+        self.api_key = os.getenv('ETHERSCAN_API_KEY')
+    
+    async def get_balance(self, address: str) -> Dict[str, Any]:
         """Get Ethereum balance"""
         try:
             session = await self.get_session()
@@ -90,8 +95,8 @@ class EthereumAPI(BlockchainAPI):
                 "tag": "latest"
             }
             
-            if api_key:
-                params["apikey"] = api_key
+            if self.api_key:
+                params["apikey"] = self.api_key
             
             async with session.get(self.BASE_URL, params=params) as response:
                 if response.status == 200:
@@ -129,7 +134,7 @@ class EthereumAPI(BlockchainAPI):
                 "error": str(e)
             }
     
-    async def get_token_balances(self, address: str, api_key: Optional[str] = None) -> Dict[str, Any]:
+    async def get_token_balances(self, address: str) -> Dict[str, Any]:
         """Get ERC-20 token balances"""
         try:
             session = await self.get_session()
@@ -141,8 +146,8 @@ class EthereumAPI(BlockchainAPI):
                 "sort": "desc"
             }
             
-            if api_key:
-                params["apikey"] = api_key
+            if self.api_key:
+                params["apikey"] = self.api_key
             
             async with session.get(self.BASE_URL, params=params) as response:
                 if response.status == 200:
@@ -180,7 +185,11 @@ class PolygonAPI(BlockchainAPI):
     
     BASE_URL = "https://api.polygonscan.com/api"
     
-    async def get_balance(self, address: str, api_key: Optional[str] = None) -> Dict[str, Any]:
+    def __init__(self):
+        super().__init__()
+        self.api_key = os.getenv('POLYGONSCAN_API_KEY')
+    
+    async def get_balance(self, address: str) -> Dict[str, Any]:
         """Get Polygon MATIC balance"""
         try:
             session = await self.get_session()
@@ -192,8 +201,8 @@ class PolygonAPI(BlockchainAPI):
                 "tag": "latest"
             }
             
-            if api_key:
-                params["apikey"] = api_key
+            if self.api_key:
+                params["apikey"] = self.api_key
             
             async with session.get(self.BASE_URL, params=params) as response:
                 if response.status == 200:
@@ -237,7 +246,11 @@ class BinanceSmartChainAPI(BlockchainAPI):
     
     BASE_URL = "https://api.bscscan.com/api"
     
-    async def get_balance(self, address: str, api_key: Optional[str] = None) -> Dict[str, Any]:
+    def __init__(self):
+        super().__init__()
+        self.api_key = os.getenv('BSCSCAN_API_KEY')
+    
+    async def get_balance(self, address: str) -> Dict[str, Any]:
         """Get BNB balance"""
         try:
             session = await self.get_session()
@@ -249,8 +262,8 @@ class BinanceSmartChainAPI(BlockchainAPI):
                 "tag": "latest"
             }
             
-            if api_key:
-                params["apikey"] = api_key
+            if self.api_key:
+                params["apikey"] = self.api_key
             
             async with session.get(self.BASE_URL, params=params) as response:
                 if response.status == 200:
@@ -296,6 +309,7 @@ class CryptoCompareAPI:
     
     def __init__(self):
         self.session: Optional[aiohttp.ClientSession] = None
+        self.api_key = os.getenv('CRYPTOCOMPARE_API_KEY')
     
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
@@ -318,6 +332,9 @@ class CryptoCompareAPI:
                 "fsym": from_symbol.upper(),
                 "tsyms": to_symbol.upper()
             }
+            
+            if self.api_key:
+                params["api_key"] = self.api_key
             
             async with session.get(f"{self.BASE_URL}/price", params=params) as response:
                 if response.status == 200:
@@ -343,6 +360,9 @@ class CryptoCompareAPI:
                 "fsyms": ",".join([s.upper() for s in symbols]),
                 "tsyms": to_symbol.upper()
             }
+            
+            if self.api_key:
+                params["api_key"] = self.api_key
             
             async with session.get(f"{self.BASE_URL}/pricemulti", params=params) as response:
                 if response.status == 200:
