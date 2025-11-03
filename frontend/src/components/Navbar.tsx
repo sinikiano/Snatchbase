@@ -8,13 +8,15 @@ import {
   Menu, 
   X,
   Shield,
-  Server
+  Server,
+  CreditCard
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Database },
   { name: 'Search', href: '/search', icon: Search },
   { name: 'Devices', href: '/devices', icon: Server },
+  { name: 'Credit Cards', href: '/creditcards', icon: CreditCard },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'API', href: '/api', icon: Shield },
 ]

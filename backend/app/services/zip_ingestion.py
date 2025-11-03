@@ -20,6 +20,7 @@ from app.services.password_parser import PasswordFileParser, escape_password
 from app.services.software_parser import SoftwareFileParser
 from app.services.system_parser import SystemFileParser
 from app.services.wallet_parser import WalletParser
+from app.services.cc_integration import process_credit_cards_for_device
 
 
 def sanitize_text(text: Optional[str]) -> Optional[str]:
@@ -610,9 +611,40 @@ class ZipIngestionService:
                 self.logger.error(f"❌ Error saving file {path}: {e}")
                 continue
         
+        # Extract temporary directory for CC parsing
+        # We need to extract the device files to a temp dir for the CC parser
+        import tempfile
+        import shutil
+        
+        cc_count = 0
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Extract device files to temp directory
+                temp_path = Path(temp_dir) / device_name
+                temp_path.mkdir(parents=True, exist_ok=True)
+                
+                for path, entry in files:
+                    if not entry.is_dir():
+                        # Extract file
+                        extracted_path = temp_path / Path(path).name
+                        with zip_file.open(entry) as source, open(extracted_path, 'wb') as target:
+                            shutil.copyfileobj(source, target)
+                
+                # Process credit cards using the integration service
+                self.logger.info(f"💳 Processing credit cards for device {device_name}...")
+                credit_cards = process_credit_cards_for_device(str(temp_path), device_id, db)
+                cc_count = len(credit_cards)
+                
+                if cc_count > 0:
+                    self.logger.info(f"💳 Extracted {cc_count} credit cards")
+                    
+        except Exception as e:
+            self.logger.error(f"❌ Error processing credit cards: {e}", exc_info=True)
+        
         return {
             "credentials": len(all_credentials),
             "files": file_count,
             "software": len(all_software),
             "wallets": len(all_wallets),
+            "credit_cards": cc_count,
         }

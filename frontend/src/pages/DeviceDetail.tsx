@@ -18,11 +18,13 @@ import {
   Folder,
   File,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  CreditCard as CreditCardIcon
 } from 'lucide-react'
-import { fetchDevice, fetchDeviceCredentials } from '@/services/api'
+import { fetchDevice, fetchDeviceCredentials, fetchDeviceCreditCards } from '@/services/api'
 import toast from 'react-hot-toast'
 import CredentialCard from '@/components/CredentialCard'
+import CreditCardList from '@/components/CreditCardList'
 import { getCountryInfo } from '@/utils/countries'
 
 interface Device {
@@ -52,13 +54,15 @@ export default function DeviceDetail() {
   const navigate = useNavigate()
   const [device, setDevice] = useState<Device | null>(null)
   const [credentials, setCredentials] = useState<any[]>([])
+  const [creditCards, setCreditCards] = useState<any[]>([])
   const [files, setFiles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showPasswords, setShowPasswords] = useState(false)
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
+  const [totalCards, setTotalCards] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<'credentials' | 'files'>('credentials')
+  const [activeTab, setActiveTab] = useState<'credentials' | 'files' | 'creditcards'>('credentials')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -72,15 +76,18 @@ export default function DeviceDetail() {
     
     try {
       setLoading(true)
-      const [deviceData, credsData, filesData] = await Promise.all([
+      const [deviceData, credsData, cardsData, filesData] = await Promise.all([
         fetchDevice(deviceIdNum),
         fetchDeviceCredentials(deviceIdNum, { limit: 50, offset: page * 50 }),
+        fetchDeviceCreditCards(deviceIdNum, { limit: 50, offset: 0 }),
         fetch(`http://localhost:8000/devices/${deviceIdNum}/files?limit=1000`).then(r => r.json())
       ])
       
       setDevice(deviceData)
       setCredentials(credsData.results)
       setTotal(credsData.total)
+      setCreditCards(cardsData.results)
+      setTotalCards(cardsData.total)
       setFiles(filesData.results || [])
     } catch (error) {
       console.error('Failed to load device:', error)
@@ -455,6 +462,24 @@ export default function DeviceDetail() {
           </button>
           
           <button
+            onClick={() => setActiveTab('creditcards')}
+            className={`px-6 py-3 font-medium transition-all relative ${
+              activeTab === 'creditcards'
+                ? 'text-primary-400'
+                : 'text-dark-400 hover:text-white'
+            }`}
+          >
+            <CreditCardIcon className="h-4 w-4 inline mr-2" />
+            Credit Cards ({totalCards})
+            {activeTab === 'creditcards' && (
+              <motion.div
+                layoutId="activeTab"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-400"
+              />
+            )}
+          </button>
+          
+          <button
             onClick={() => setActiveTab('files')}
             className={`px-6 py-3 font-medium transition-all relative ${
               activeTab === 'files'
@@ -539,6 +564,15 @@ export default function DeviceDetail() {
                 <p className="text-dark-400">Try adjusting your search</p>
               </div>
             )}
+          </motion.div>
+        ) : activeTab === 'creditcards' ? (
+          <motion.div
+            key="creditcards"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            <CreditCardList cards={creditCards} isLoading={loading} />
           </motion.div>
         ) : (
           <motion.div

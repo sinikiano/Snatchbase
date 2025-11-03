@@ -6,7 +6,7 @@ Modular architecture for better maintainability
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from telegram import Update
 from .config import logger, TELEGRAM_BOT_TOKEN, ALLOWED_USER_ID, UPLOAD_DIR
-from .commands import start_command, status_command, top100_command
+from .commands import start_command, status_command, top100_command, creditcards_command, ccstats_command
 from .extractdomains import extractdomains_command
 from .handlers import handle_document, handle_message
 from .callbacks import button_callback
@@ -38,6 +38,8 @@ def main():
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("recent", recent_command))
     application.add_handler(CommandHandler("search", search_command))
+    application.add_handler(CommandHandler("creditcards", creditcards_command))
+    application.add_handler(CommandHandler("ccstats", ccstats_command))
     application.add_handler(CommandHandler("wallets", wallets_command))
     application.add_handler(CommandHandler("checkwallets", checkwallets_command))
     application.add_handler(CommandHandler("checkbalances", checkbalances_command))

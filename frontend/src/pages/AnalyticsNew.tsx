@@ -7,9 +7,19 @@ import {
   Activity,
   Globe,
   AlertTriangle,
-  TrendingUp
+  TrendingUp,
+  CreditCard
 } from 'lucide-react'
-import { fetchStatistics, fetchBrowserStats, fetchTldStats, fetchPasswordStats, fetchStealerStats, fetchDevices } from '@/services/api'
+import { 
+  fetchStatistics, 
+  fetchBrowserStats, 
+  fetchTldStats, 
+  fetchPasswordStats, 
+  fetchStealerStats, 
+  fetchDevices,
+  fetchCreditCardStats,
+  fetchCardBrandStats
+} from '@/services/api'
 import toast from 'react-hot-toast'
 
 interface Stats {
@@ -32,6 +42,8 @@ export default function AnalyticsNew() {
   const [tldStats, setTldStats] = useState<StatItem[]>([])
   const [passwordStats, setPasswordStats] = useState<StatItem[]>([])
   const [stealerStats, setStealerStats] = useState<StatItem[]>([])
+  const [creditCardStats, setCreditCardStats] = useState<any>(null)
+  const [cardBrandStats, setCardBrandStats] = useState<StatItem[]>([])
   const [recentDevices, setRecentDevices] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -42,13 +54,15 @@ export default function AnalyticsNew() {
   const loadAnalyticsData = async () => {
     try {
       setLoading(true)
-      const [statsData, browsers, tlds, passwords, stealers, devices] = await Promise.all([
+      const [statsData, browsers, tlds, passwords, stealers, devices, ccStats, brandStats] = await Promise.all([
         fetchStatistics(),
         fetchBrowserStats(15),
         fetchTldStats(15),
         fetchPasswordStats(15),
         fetchStealerStats(15),
-        fetchDevices({ limit: 10 })
+        fetchDevices({ limit: 10 }),
+        fetchCreditCardStats().catch(() => ({ total_cards: 0, unique_devices: 0, cards_by_brand: {} })),
+        fetchCardBrandStats().catch(() => [])
       ])
       
       setStats(statsData)
@@ -57,6 +71,8 @@ export default function AnalyticsNew() {
       setPasswordStats(passwords.map((p: any) => ({ name: p.password, count: p.count })))
       setStealerStats(stealers.map((s: any) => ({ name: s.stealer_name, count: s.count })))
       setRecentDevices(devices.results)
+      setCreditCardStats(ccStats)
+      setCardBrandStats(brandStats.map((b: any) => ({ name: b.brand, count: b.count })))
     } catch (error) {
       console.error('Failed to load analytics:', error)
       toast.error('Failed to load analytics data')
@@ -90,6 +106,12 @@ export default function AnalyticsNew() {
       value: stats?.total_systems.toLocaleString() || '0',
       icon: Server,
       color: 'from-purple-500 to-pink-500',
+    },
+    {
+      title: 'Credit Cards',
+      value: creditCardStats?.total_cards.toLocaleString() || '0',
+      icon: CreditCard,
+      color: 'from-emerald-500 to-teal-500',
     },
     {
       title: 'Unique Domains',
@@ -228,6 +250,70 @@ export default function AnalyticsNew() {
           </div>
         </motion.div>
       </div>
+
+      {/* Credit Card Brands */}
+      {cardBrandStats.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55 }}
+          className="mb-8"
+        >
+          <div className="card bg-dark-800/50 backdrop-blur-xl border border-dark-700/50 p-6 rounded-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-emerald-400" />
+                Credit Card Brands
+              </h2>
+              <span className="text-sm text-dark-400">
+                Total: {creditCardStats?.total_cards.toLocaleString() || 0} cards
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {cardBrandStats.map((brand, index) => {
+                const totalCards = creditCardStats?.total_cards || 1
+                const percentage = ((brand.count / totalCards) * 100).toFixed(1)
+                const brandColors: { [key: string]: string } = {
+                  'Visa': 'from-blue-500 to-blue-400',
+                  'Mastercard': 'from-orange-500 to-orange-400',
+                  'American Express': 'from-green-500 to-green-400',
+                  'Discover': 'from-purple-500 to-purple-400',
+                  'JCB': 'from-red-500 to-red-400',
+                  'Diners Club': 'from-indigo-500 to-indigo-400',
+                  'Unknown': 'from-gray-500 to-gray-400'
+                }
+                const gradient = brandColors[brand.name] || 'from-gray-500 to-gray-400'
+                
+                return (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="relative group"
+                  >
+                    <div className="p-4 bg-dark-700/30 rounded-xl border border-dark-600/30 hover:border-primary-500/30 transition-all">
+                      <div className={`w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-lg font-bold`}>
+                        {brand.name.charAt(0)}
+                      </div>
+                      <h3 className="text-xs font-semibold text-dark-300 text-center mb-1 truncate">
+                        {brand.name}
+                      </h3>
+                      <p className="text-xl font-bold text-white text-center">
+                        {brand.count.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-dark-400 text-center mt-1">
+                        {percentage}%
+                      </p>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Stealer Families & Top Passwords */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
