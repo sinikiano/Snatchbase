@@ -43,21 +43,48 @@ Modern web application for ingesting, analyzing, and searching through stealer m
 
 ## 🏗️ Architecture
 
+### Version 2.0 - Modular Service Architecture
+
+Snatchbase now uses a **service-oriented architecture** for improved reliability and maintainability:
+
+- **Independent Services**: Each component runs in its own process
+- **Fault Isolation**: Service failures don't crash the entire application
+- **Health Monitoring**: Automatic health checks and restart on failure
+- **Easy Scaling**: Services can be scaled independently
+- **Simple Management**: Control all services with `snatchctl` CLI tool
+
+**Services:**
+- **API Service** - FastAPI web server (port 8000)
+- **Telegram Bot Service** - Bot for search and analytics
+- **File Watcher Service** - Monitors and ingests ZIP files
+- **Wallet Checker Service** - Checks cryptocurrency balances
+
+See `ARCHITECTURE_V2.md` for complete architectural details.
+
 ### Backend Stack
-- **FastAPI** - High-performance async Python web framework
+- **FastAPI** - High-performance async Python web framework (v2.0.0)
 - **SQLAlchemy** - ORM with PostgreSQL/SQLite support
 - **Uvicorn** - ASGI server for production deployment
 - **Watchdog** - File system monitoring for auto-ingestion
+- **Service Manager** - Process supervision and health monitoring
 - **Custom parsers** - Passwords.txt, System.txt, Software.txt
 
 ### Frontend Stack
 - **React 18** - Modern UI library with hooks
 - **TypeScript** - Type-safe development
-- **Vite** - Lightning-fast build tool
+- **Vite 4** - Lightning-fast build tool
 - **Tailwind CSS** - Utility-first styling
 - **Framer Motion** - Smooth animations
 - **Axios** - HTTP client for API calls
-- **React Router** - Client-side routing
+- **React Router v6** - Client-side routing
+
+### Integration
+- **Proxy Configuration** - Vite proxies `/api` requests to backend
+- **CORS Enabled** - Backend accepts cross-origin requests
+- **Consistent API** - All endpoints under `/api` prefix
+- **Type Safety** - TypeScript types match backend schemas
+
+See `FRONTEND_INTEGRATION.md` for frontend-backend sync details.
 
 ### Database Schema
 - **Devices** - Compromised systems with hardware info
@@ -123,38 +150,51 @@ cp your_stealer_logs.zip backend/data/incoming/uploads/
 
 ### 5. Start Snatchbase
 
-Use the provided startup script to launch both backend and frontend:
+**Option 1: Start Everything (Recommended)**
 
 ```bash
-# Make script executable (first time only)
-chmod +x start_snatchbase.sh
-
-# Start both services
-./start_snatchbase.sh
+./start_full_stack.sh
 ```
 
-The script will:
-- Start the backend API on http://localhost:8000
-- Start the frontend on http://localhost:3000
-- Enable auto-ingestion (watches `backend/data/incoming/uploads/`)
-- Show access points and usage info
+This will:
+- Launch all backend services (API, Telegram Bot, File Watcher, Wallet Checker)
+- Start the frontend development server
+- Show access points and control commands
 
-**Press Ctrl+C to stop all services**
-
-Alternatively, start services manually:
+**Option 2: Start Backend Services Only**
 
 ```bash
-# Terminal 1 - Backend
-cd backend
-source venv/bin/activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Terminal 2 - Frontend
-cd frontend
-npm run dev
+./start_snatchbase_v2.sh
 ```
 
-**The backend will automatically detect and ingest any ZIP files in `backend/data/incoming/uploads/`** when it starts and while running!
+**Option 3: Start Frontend Only**
+
+```bash
+./start_frontend.sh
+```
+
+**Option 4: Manual Control (Individual Services)**
+
+```bash
+# Start API service
+python -m backend.launcher.api_service
+
+# Start Telegram bot
+python -m backend.launcher.telegram_service
+
+# Start file watcher
+python -m backend.launcher.file_watcher_service
+
+# Start wallet checker
+python -m backend.launcher.wallet_checker_service
+
+# Control all services
+python -m backend.launcher.snatchctl status
+python -m backend.launcher.snatchctl start api
+python -m backend.launcher.snatchctl stop all
+```
+
+**The file watcher service will automatically detect and ingest any ZIP files in `backend/data/incoming/uploads/`** when running!
 
 ---
 

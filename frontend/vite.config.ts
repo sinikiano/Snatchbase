@@ -14,12 +14,11 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true, // Allow external connections
-    allowedHosts: true, // Allow all hosts
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        secure: false,
       },
     },
   },
