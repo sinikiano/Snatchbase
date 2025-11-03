@@ -203,3 +203,28 @@ class Wallet(Base):
         Index('idx_has_balance', 'has_balance'),
         Index('idx_device_wallet', 'device_id', 'wallet_type'),
     )
+
+
+class CreditCard(Base):
+    """Credit Card model - stores credit card information from stealer logs"""
+    __tablename__ = "credit_cards"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String(500), ForeignKey('devices.device_id'), nullable=False, index=True)
+    card_number = Column(String(20), index=True)  # Card number (consider masking last 4)
+    card_number_masked = Column(String(20))  # Masked version: ****1234
+    expiration = Column(String(10))  # Format: MM/YY or MM/YYYY
+    cardholder_name = Column(String(500))
+    card_brand = Column(String(50), index=True)  # Visa, Mastercard, Amex, etc.
+    source_file = Column(Text)  # Path to the CC file
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationship
+    device = relationship("Device", foreign_keys=[device_id])
+    
+    # Indexes
+    __table_args__ = (
+        Index('idx_cc_device_id', 'device_id'),
+        Index('idx_cc_brand', 'card_brand'),
+        Index('idx_cc_created_at', 'created_at'),
+    )
