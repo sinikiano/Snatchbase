@@ -75,6 +75,41 @@ print_error() {
     echo "  [✗] $1" >> "$LOG_FILE"
 }
 
+check_port_open() {
+    local port=$1
+    if command -v netstat &> /dev/null; then
+        netstat -tuln | grep -q ":$port "
+    elif command -v ss &> /dev/null; then
+        ss -tuln | grep -q ":$port "
+    else
+        return 1
+    fi
+}
+
+display_port_status() {
+    echo -e "${YELLOW}🔌 Port Status Check:${NC}"
+    
+    local ports=("22:SSH" "80:HTTP" "443:HTTPS" "8000:FastAPI" "3000:React/Node" "$API_PORT:API" "5173:Frontend")
+    
+    for port_info in "${ports[@]}"; do
+        IFS=':' read -r port name <<< "$port_info"
+        if check_port_open "$port"; then
+            echo -e "  ${GREEN}✓${NC} Port $port ($name) - Listening"
+        else
+            echo -e "  ${YELLOW}○${NC} Port $port ($name) - Not in use"
+        fi
+    done
+    
+    if [ "$DB_TYPE" = "postgresql" ]; then
+        if check_port_open "5432"; then
+            echo -e "  ${GREEN}✓${NC} Port 5432 (PostgreSQL) - Listening"
+        else
+            echo -e "  ${YELLOW}○${NC} Port 5432 (PostgreSQL) - Not in use"
+        fi
+    fi
+    echo ""
+}
+
 ask_input() {
     local prompt="$1"
     local var_name="$2"
@@ -645,19 +680,164 @@ setup_firewall() {
     
     print_step "Configuring firewall..."
     
+    # Detect firewall system
     if command -v ufw &> /dev/null; then
-        sudo ufw allow 22/tcp  # SSH
-        sudo ufw allow 80/tcp  # HTTP
-        sudo ufw allow 443/tcp # HTTPS
-        sudo ufw allow $API_PORT/tcp  # API
+        print_status "Using UFW (Uncomplicated Firewall)..."
         
-        if confirm "Enable firewall now?"; then
-            sudo ufw --force enable
-            print_success "Firewall configured and enabled"
+        # Essential ports
+        print_status "Opening essential ports..."
+        sudo ufw allow 22/tcp comment 'SSH' >> "$LOG_FILE" 2>&1
+        sudo ufw allow 80/tcp comment 'HTTP' >> "$LOG_FILE" 2>&1
+        sudo ufw allow 443/tcp comment 'HTTPS' >> "$LOG_FILE" 2>&1
+        
+        # Application ports
+        print_status "Opening application ports..."
+        sudo ufw allow $API_PORT/tcp comment 'Snatchbase API' >> "$LOG_FILE" 2>&1
+        sudo ufw allow 8000/tcp comment 'FastAPI Default' >> "$LOG_FILE" 2>&1
+        sudo ufw allow 3000/tcp comment 'React/Node Apps' >> "$LOG_FILE" 2>&1
+        sudo ufw allow 5173/tcp comment 'Vite Dev Server' >> "$LOG_FILE" 2>&1
+        
+        # Database ports (if using PostgreSQL)
+        if [ "$DB_TYPE" = "postgresql" ]; then
+            if confirm "Allow external PostgreSQL connections? (only if needed)"; then
+                sudo ufw allow 5432/tcp comment 'PostgreSQL' >> "$LOG_FILE" 2>&1
+                print_status "PostgreSQL port 5432 opened"
+            fi
         fi
+        
+        # Display current rules
+        echo ""
+        print_status "Firewall rules to be applied:"
+        echo "  • SSH (22/tcp) - Remote access"
+        echo "  • HTTP (80/tcp) - Web traffic"
+        echo "  • HTTPS (443/tcp) - Secure web traffic"
+        echo "  • API ($API_PORT/tcp) - FastAPI backend"
+        echo "  • Port 8000/tcp - FastAPI default port"
+        echo "  • Port 3000/tcp - React/Node.js apps"
+        echo "  • Vite (5173/tcp) - Frontend dev server"
+        if [ "$DB_TYPE" = "postgresql" ] && sudo ufw status | grep -q "5432"; then
+            echo "  • PostgreSQL (5432/tcp) - Database"
+        fi
+        echo ""
+        
+        # Enable firewall
+        if confirm "Enable firewall now?"; then
+            sudo ufw --force enable >> "$LOG_FILE" 2>&1
+            print_success "Firewall configured and enabled"
+            echo ""
+            sudo ufw status numbered
+        else
+            print_warning "Firewall configured but not enabled. Run 'sudo ufw enable' manually."
+        fi
+        
+    elif command -v firewall-cmd &> /dev/null; then
+        print_status "Using firewalld..."
+        
+        # Essential ports
+        print_status "Opening essential ports..."
+        sudo firewall-cmd --permanent --add-service=ssh >> "$LOG_FILE" 2>&1
+        sudo firewall-cmd --permanent --add-service=http >> "$LOG_FILE" 2>&1
+        sudo firewall-cmd --permanent --add-service=https >> "$LOG_FILE" 2>&1
+        
+        # Application ports
+        print_status "Opening application ports..."
+        sudo firewall-cmd --permanent --add-port=$API_PORT/tcp >> "$LOG_FILE" 2>&1
+        sudo firewall-cmd --permanent --add-port=8000/tcp >> "$LOG_FILE" 2>&1
+        sudo firewall-cmd --permanent --add-port=3000/tcp >> "$LOG_FILE" 2>&1
+        sudo firewall-cmd --permanent --add-port=5173/tcp >> "$LOG_FILE" 2>&1
+        
+        # Database ports
+        if [ "$DB_TYPE" = "postgresql" ]; then
+            if confirm "Allow external PostgreSQL connections? (only if needed)"; then
+                sudo firewall-cmd --permanent --add-service=postgresql >> "$LOG_FILE" 2>&1
+                print_status "PostgreSQL port opened"
+            fi
+        fi
+        
+        # Reload firewall
+        sudo firewall-cmd --reload >> "$LOG_FILE" 2>&1
+        print_success "Firewall configured and reloaded"
+        echo ""
+        sudo firewall-cmd --list-all
+        
+    elif command -v iptables &> /dev/null; then
+        print_status "Using iptables..."
+        print_warning "Setting up basic iptables rules..."
+        
+        # Flush existing rules (optional)
+        if confirm "Flush existing iptables rules?"; then
+            sudo iptables -F >> "$LOG_FILE" 2>&1
+        fi
+        
+        # Allow established connections
+        sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT >> "$LOG_FILE" 2>&1
+        
+        # Allow loopback
+        sudo iptables -A INPUT -i lo -j ACCEPT >> "$LOG_FILE" 2>&1
+        
+        # Essential ports
+        sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT -m comment --comment "SSH" >> "$LOG_FILE" 2>&1
+        sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT -m comment --comment "HTTP" >> "$LOG_FILE" 2>&1
+        sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT -m comment --comment "HTTPS" >> "$LOG_FILE" 2>&1
+        
+        # Application ports
+        sudo iptables -A INPUT -p tcp --dport $API_PORT -j ACCEPT -m comment --comment "Snatchbase API" >> "$LOG_FILE" 2>&1
+        sudo iptables -A INPUT -p tcp --dport 8000 -j ACCEPT -m comment --comment "FastAPI Default" >> "$LOG_FILE" 2>&1
+        sudo iptables -A INPUT -p tcp --dport 3000 -j ACCEPT -m comment --comment "React/Node Apps" >> "$LOG_FILE" 2>&1
+        sudo iptables -A INPUT -p tcp --dport 5173 -j ACCEPT -m comment --comment "Vite Dev" >> "$LOG_FILE" 2>&1
+        
+        # Database ports
+        if [ "$DB_TYPE" = "postgresql" ]; then
+            if confirm "Allow external PostgreSQL connections?"; then
+                sudo iptables -A INPUT -p tcp --dport 5432 -j ACCEPT -m comment --comment "PostgreSQL" >> "$LOG_FILE" 2>&1
+            fi
+        fi
+        
+        # Drop other incoming
+        if confirm "Drop all other incoming traffic?"; then
+            sudo iptables -A INPUT -j DROP >> "$LOG_FILE" 2>&1
+        fi
+        
+        # Save rules
+        if [ -f /etc/debian_version ]; then
+            sudo apt-get install -y iptables-persistent >> "$LOG_FILE" 2>&1
+            sudo netfilter-persistent save >> "$LOG_FILE" 2>&1
+        elif [ -f /etc/redhat-release ]; then
+            sudo service iptables save >> "$LOG_FILE" 2>&1
+        fi
+        
+        print_success "Iptables rules configured"
+        echo ""
+        sudo iptables -L -n -v
+        
     else
-        print_warning "UFW not found. Please configure firewall manually."
+        print_warning "No supported firewall found (ufw, firewalld, or iptables)"
+        print_warning "Please configure firewall manually with these ports:"
+        echo "  • 22/tcp (SSH)"
+        echo "  • 80/tcp (HTTP)"
+        echo "  • 443/tcp (HTTPS)"
+        echo "  • $API_PORT/tcp (API)"
+        echo "  • 8000/tcp (FastAPI Default)"
+        echo "  • 3000/tcp (React/Node Apps)"
+        echo "  • 5173/tcp (Vite Dev)"
     fi
+    
+    echo ""
+    print_status "Firewall Configuration Summary:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Required Ports for Snatchbase:"
+    echo "  • SSH (22)        - Remote server access"
+    echo "  • HTTP (80)       - Web application (production)"
+    echo "  • HTTPS (443)     - Secure web application (with SSL)"
+    echo "  • API ($API_PORT)       - Backend API service"
+    echo "  • Port 8000       - FastAPI default port"
+    echo "  • Port 3000       - React/Node.js applications"
+    echo "  • Frontend (5173) - Development server (dev only)"
+    echo ""
+    echo "Optional Ports:"
+    echo "  • PostgreSQL (5432) - If using external database"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
 }
 
 ################################################################################
@@ -715,6 +895,29 @@ print_summary() {
     echo "    • Frontend: http://localhost:5173 (dev mode)"
     echo ""
     
+    echo -e "${YELLOW}🔒 Network Ports:${NC}"
+    echo "    • SSH: 22 (remote access)"
+    echo "    • HTTP: 80 (web traffic)"
+    echo "    • HTTPS: 443 (secure web)"
+    echo "    • FastAPI: 8000 (default FastAPI port)"
+    echo "    • React/Node: 3000 (default React/Node.js port)"
+    echo "    • API: $API_PORT (backend service)"
+    echo "    • Frontend Dev: 5173 (development only)"
+    if [ "$DB_TYPE" = "postgresql" ]; then
+        echo "    • PostgreSQL: 5432 (database)"
+    fi
+    echo ""
+    
+    if command -v ufw &> /dev/null && sudo ufw status | grep -q "Status: active"; then
+        echo -e "${GREEN}✓ Firewall (UFW) is active${NC}"
+    elif command -v firewall-cmd &> /dev/null && sudo firewall-cmd --state &> /dev/null; then
+        echo -e "${GREEN}✓ Firewall (firewalld) is active${NC}"
+    fi
+    echo ""
+    
+    # Display port status
+    display_port_status
+    
     if [ "$TELEGRAM_ENABLED" = "false" ]; then
         echo -e "${YELLOW}⚠️  Telegram Bot Not Configured${NC}"
         echo "    Edit $BACKEND_DIR/.env to add:"
@@ -724,6 +927,38 @@ print_summary() {
     fi
     
     echo -e "${GREEN}✨ Snatchbase is ready to use!${NC}\n"
+    
+    echo -e "${YELLOW}📌 Important Notes:${NC}"
+    echo ""
+    echo "  ${BLUE}Cloud Provider Firewall:${NC}"
+    echo "    If you're on AWS, GCP, Azure, or DigitalOcean, you must also"
+    echo "    configure security groups/firewall rules in your cloud console:"
+    echo ""
+    echo "    AWS EC2 Security Groups:"
+    echo "      • Inbound: 22, 80, 443, 8000, 3000, $API_PORT, 5173"
+    echo "      • Console: EC2 → Security Groups → Edit Inbound Rules"
+    echo ""
+    echo "    DigitalOcean Firewall:"
+    echo "      • Inbound: 22, 80, 443, 8000, 3000, $API_PORT, 5173"
+    echo "      • Console: Networking → Firewalls → Edit Rules"
+    echo ""
+    echo "    GCP Firewall Rules:"
+    echo "      • gcloud compute firewall-rules create snatchbase \\"
+    echo "        --allow tcp:22,tcp:80,tcp:443,tcp:8000,tcp:3000,tcp:$API_PORT,tcp:5173"
+    echo ""
+    echo "    Azure Network Security Group:"
+    echo "      • Inbound: 22, 80, 443, 8000, 3000, $API_PORT, 5173"
+    echo "      • Portal: NSG → Inbound security rules → Add"
+    echo ""
+    
+    echo -e "${YELLOW}🔐 Security Recommendations:${NC}"
+    echo "    • Change default SSH port from 22"
+    echo "    • Setup SSL/TLS certificates (certbot for Let's Encrypt)"
+    echo "    • Use strong database passwords"
+    echo "    • Keep your .env file secure (chmod 600)"
+    echo "    • Close port 5173 in production (dev only)"
+    echo "    • Enable fail2ban for SSH protection"
+    echo ""
 }
 
 ################################################################################
