@@ -702,10 +702,11 @@ print_summary() {
     fi
     
     echo -e "${YELLOW}📚 Documentation:${NC}"
-    echo "    • Project Structure: $SNATCHBASE_DIR/PROJECT_STRUCTURE.md"
-    echo "    • Configuration Audit: $SNATCHBASE_DIR/CONFIGURATION_AUDIT.md"
-    echo "    • Innovation Roadmap: $SNATCHBASE_DIR/INNOVATION_ROADMAP.md"
-    echo "    • Quick Start Guide: $SNATCHBASE_DIR/QUICK_START.md"
+    echo "    • Installation Guide: $SNATCHBASE_DIR/docs/INSTALLATION_GUIDE.md"
+    echo "    • Project Structure: $SNATCHBASE_DIR/docs/PROJECT_STRUCTURE.md"
+    echo "    • Configuration Audit: $SNATCHBASE_DIR/docs/CONFIGURATION_AUDIT.md"
+    echo "    • Innovation Roadmap: $SNATCHBASE_DIR/docs/INNOVATION_ROADMAP.md"
+    echo "    • Quick Start Guide: $SNATCHBASE_DIR/docs/QUICK_START.md"
     echo ""
     
     echo -e "${YELLOW}🌐 Access Points:${NC}"

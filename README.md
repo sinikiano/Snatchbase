@@ -119,7 +119,7 @@ The installer will:
 - ✅ Initialize the database
 - ✅ Optionally configure systemd services, Nginx, and firewall
 
-See **[INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)** for complete details.
+See **[INSTALLATION_GUIDE.md](docs/INSTALLATION_GUIDE.md)** for complete details.
 
 ### Manual Installation
 
