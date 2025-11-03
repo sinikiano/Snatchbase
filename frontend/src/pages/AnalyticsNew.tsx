@@ -61,7 +61,7 @@ export default function AnalyticsNew() {
         fetchPasswordStats(15),
         fetchStealerStats(15),
         fetchDevices({ limit: 10 }),
-        fetchCreditCardStats().catch(() => ({ total_cards: 0, unique_devices: 0, cards_by_brand: {} })),
+        fetchCreditCardStats().catch(() => ({ total_credit_cards: 0, devices_with_cards: 0, by_brand: [] })),
         fetchCardBrandStats().catch(() => [])
       ])
       
@@ -109,7 +109,7 @@ export default function AnalyticsNew() {
     },
     {
       title: 'Credit Cards',
-      value: creditCardStats?.total_cards.toLocaleString() || '0',
+      value: creditCardStats?.total_credit_cards.toLocaleString() || '0',
       icon: CreditCard,
       color: 'from-emerald-500 to-teal-500',
     },
@@ -266,13 +266,13 @@ export default function AnalyticsNew() {
                 Credit Card Brands
               </h2>
               <span className="text-sm text-dark-400">
-                Total: {creditCardStats?.total_cards.toLocaleString() || 0} cards
+                Total: {creditCardStats?.total_credit_cards.toLocaleString() || 0} cards
               </span>
             </div>
             
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {cardBrandStats.map((brand, index) => {
-                const totalCards = creditCardStats?.total_cards || 1
+                const totalCards = creditCardStats?.total_credit_cards || 1
                 const percentage = ((brand.count / totalCards) * 100).toFixed(1)
                 const brandColors: { [key: string]: string } = {
                   'Visa': 'from-blue-500 to-blue-400',

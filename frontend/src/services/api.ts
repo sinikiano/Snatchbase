@@ -149,9 +149,9 @@ export interface CreditCard {
 }
 
 export interface CreditCardStats {
-  total_cards: number
-  unique_devices: number
-  cards_by_brand: { [brand: string]: number }
+  total_credit_cards: number
+  devices_with_cards: number
+  by_brand: Array<{ brand: string; count: number }>
 }
 
 export interface CardBrandStat {
