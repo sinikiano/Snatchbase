@@ -70,3 +70,5 @@ Thumbs.db
 
 # Logs
 *.log*.pid
+# Log files
+*.log

@@ -13,7 +13,7 @@ from app.database import engine
 from app.models import Base
 
 # Import routers
-from app.routers import wallets, credentials, devices, statistics, files, credit_cards
+from app.routers import wallets, credentials, devices, statistics, files, credit_cards, uploads
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -40,6 +40,7 @@ app.include_router(statistics.router, prefix="/api", tags=["statistics"])
 app.include_router(files.router, prefix="/api", tags=["files"])
 app.include_router(wallets.router, prefix="/api", tags=["wallets"])
 app.include_router(credit_cards.router, prefix="/api", tags=["credit-cards"])
+app.include_router(uploads.router, prefix="/api", tags=["uploads"])
 
 
 @app.get("/")

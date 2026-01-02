@@ -65,7 +65,7 @@ export default function ApiDocs() {
   const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/stats')
+    fetch('http://localhost:8000/api/stats')
       .then(res => res.json())
       .then(setStats)
       .catch(console.error);
@@ -74,17 +74,45 @@ export default function ApiDocs() {
   const endpoints = [
     {
       method: 'GET',
-      path: '/stats',
+      path: '/api/stats',
       description: 'Get overall database statistics.',
-      example: 'curl http://localhost:8000/stats',
+      example: 'curl http://localhost:8000/api/stats',
       response: JSON.stringify({ total_credentials: 46346, total_systems: 110, unique_domains: 2847, unique_stealers: 1989 }, null, 2)
     },
     {
       method: 'GET',
-      path: '/search/credentials?q=...',
+      path: '/api/search/credentials?q=...',
       description: 'Search for credentials with a query string. Supports advanced queries like `domain:google.com`.',
-      example: 'curl "http://localhost:8000/search/credentials?q=domain:gmail.com&limit=1"',
+      example: 'curl "http://localhost:8000/api/search/credentials?q=domain:gmail.com&limit=1"',
       response: JSON.stringify({ results: [{ id: 1, username: 'test', password: 'password123', domain: 'gmail.com' }], total: 1, limit: 1, offset: 0 }, null, 2)
+    },
+    {
+      method: 'GET',
+      path: '/api/devices',
+      description: 'Get list of all devices with pagination.',
+      example: 'curl "http://localhost:8000/api/devices?limit=10&offset=0"',
+      response: JSON.stringify({ results: [{ id: 1, device_id: "abc123", device_name: "PC-001", hostname: "DESKTOP-ABC" }], total: 1, limit: 10, offset: 0 }, null, 2)
+    },
+    {
+      method: 'GET',
+      path: '/api/wallets',
+      description: 'Get list of all cryptocurrency wallets found.',
+      example: 'curl "http://localhost:8000/api/wallets?limit=10"',
+      response: JSON.stringify([{ id: 1, wallet_type: "ETH", address: "0x...", has_balance: false }], null, 2)
+    },
+    {
+      method: 'GET',
+      path: '/api/credit-cards',
+      description: 'Get list of all credit cards found.',
+      example: 'curl "http://localhost:8000/api/credit-cards?limit=10"',
+      response: JSON.stringify({ results: [{ id: 1, card_number_masked: "****1234", card_brand: "Visa" }], total: 1, limit: 10, offset: 0 }, null, 2)
+    },
+    {
+      method: 'GET',
+      path: '/api/stats/domains',
+      description: 'Get top domains by credential count.',
+      example: 'curl "http://localhost:8000/api/stats/domains?limit=10"',
+      response: JSON.stringify([{ domain: "google.com", count: 1234 }, { domain: "facebook.com", count: 987 }], null, 2)
     }
   ];
 
@@ -100,7 +128,7 @@ export default function ApiDocs() {
           <SimpleStatCard title="Total Credentials" value={stats ? stats.total_credentials.toLocaleString() : '...'} icon="🔐" />
           <SimpleStatCard title="Infected Systems" value={stats ? stats.total_systems.toLocaleString() : '...'} icon="💻" />
           <SimpleStatCard title="Unique Domains" value={stats ? stats.unique_domains.toLocaleString() : '...'} icon="🌐" />
-          <SimpleStatCard title="API Endpoints" value={endpoints.length} icon="🔌" />
+          <SimpleStatCard title="API Endpoints" value="29" icon="🔌" />
         </div>
 
         <div style={styles.sectionContainer}>
