@@ -69,4 +69,4 @@ frontend/build/
 Thumbs.db
 
 # Logs
-*.log
+*.log*.pid
