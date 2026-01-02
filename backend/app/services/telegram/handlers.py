@@ -2,10 +2,12 @@
 File upload and message handlers for Telegram bot
 """
 import re
+from pathlib import Path
 from telegram import Update
 from telegram.ext import ContextTypes
 from app.database import SessionLocal
 from app.services.zip_ingestion import ZipIngestionService
+from app.services.password_archive_manager import password_manager
 from .config import logger, ALLOWED_USER_ID, UPLOAD_DIR
 from .utils import get_back_button
 from .mega_download import download_mega_file
@@ -24,11 +26,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
     file_name = document.file_name
     
-    # Only accept ZIP files
-    if not file_name.lower().endswith('.zip'):
+    # Accept ZIP and RAR files
+    if not (file_name.lower().endswith('.zip') or file_name.lower().endswith('.rar')):
         await update.message.reply_text(
-            "❌ Only ZIP files are accepted!\n"
-            "Please send a ZIP file containing stealer logs.",
+            "❌ Only ZIP and RAR files are accepted!\n"
+            "Please send a ZIP/RAR file containing stealer logs.",
             reply_markup=get_back_button()
         )
         return
@@ -47,10 +49,48 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"Downloaded file: {file_name} ({document.file_size} bytes)")
         
+        # Check if file is password protected
+        if password_manager.is_password_protected(file_path):
+            await processing_msg.edit_text(
+                f"🔐 `{file_name}` is password protected!\n\n"
+                f"⏳ Trying common passwords...",
+                parse_mode='Markdown'
+            )
+            
+            # Try common passwords
+            password = password_manager.try_common_passwords(file_path)
+            
+            if password:
+                await processing_msg.edit_text(
+                    f"🔓 Found password: `{password}`\n"
+                    f"⏳ Extracting `{file_name}`...",
+                    parse_mode='Markdown'
+                )
+                # Continue with extraction below
+            else:
+                # Add to pending archives
+                file_hash = password_manager.add_pending_archive(
+                    file_path=str(file_path),
+                    source=f"Telegram: {user_id}"
+                )
+                
+                await processing_msg.edit_text(
+                    f"🔐 *Password Required*\n\n"
+                    f"📦 File: `{file_name}`\n"
+                    f"🔢 Hash: `{file_hash}`\n\n"
+                    f"None of the common passwords worked.\n"
+                    f"Please provide the password:\n"
+                    f"`/unlock {file_hash} <password>`\n\n"
+                    f"Or check `/pending` to see all waiting archives.",
+                    parse_mode='Markdown',
+                    reply_markup=get_back_button()
+                )
+                return
+        
         # Update message
         await processing_msg.edit_text(
             f"✅ Downloaded `{file_name}`\n"
-            f"⏳ Processing ZIP file...",
+            f"⏳ Processing archive...",
             parse_mode='Markdown'
         )
         

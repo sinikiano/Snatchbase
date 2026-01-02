@@ -60,7 +60,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/topdomains - View top domains\n"
             "/extractdomains - Extract credentials from target domains\n\n"
             
-            "📤 *SEND FILES*\n"
+            "� *PASSWORD COMMANDS*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "/pending - List archives needing passwords\n"
+            "/unlock - Unlock archive with password\n"
+            "/trypasswords - Try common passwords\n"
+            "/addpassword - Add password to list\n\n"
+            
+            "�📤 *SEND FILES*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "Send me ZIP files or Mega.nz links with logs:\n"
             "✅ Upload ZIP files directly\n"

@@ -93,6 +93,24 @@ check_node() {
     fi
 }
 
+check_archive_tools() {
+    print_step "Checking archive extraction tools..."
+    
+    # Check for unrar
+    if command -v unrar &> /dev/null; then
+        print_success "unrar is installed"
+    else
+        print_warning "unrar not found. Install with: sudo apt install unrar"
+    fi
+    
+    # Check for 7z
+    if command -v 7z &> /dev/null; then
+        print_success "7z is installed"
+    else
+        print_warning "7z not found. Install with: sudo apt install p7zip-full"
+    fi
+}
+
 setup_backend() {
     print_step "Setting up backend..."
     cd "$BACKEND_DIR"
@@ -377,6 +395,7 @@ cmd_install() {
     
     check_python || exit 1
     check_node
+    check_archive_tools
     
     create_directories
     setup_backend

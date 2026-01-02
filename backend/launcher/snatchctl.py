@@ -30,6 +30,7 @@ Services:
   all               - All services (default)
   api               - FastAPI server
   telegram          - Telegram bot
+  telegram-scraper  - Telegram group/channel scraper
   file-watcher      - ZIP file ingestion
   wallet-checker    - Wallet balance checker
 
@@ -53,6 +54,9 @@ def start_service(service="all"):
     elif service == "telegram":
         print("🚀 Starting Telegram bot...")
         subprocess.run([sys.executable, str(LAUNCHER_DIR / "telegram_service.py")])
+    elif service == "telegram-scraper":
+        print("🚀 Starting Telegram scraper...")
+        subprocess.run([sys.executable, str(LAUNCHER_DIR / "telegram_scraper_service.py")])
     elif service == "file-watcher":
         print("🚀 Starting file watcher...")
         subprocess.run([sys.executable, str(LAUNCHER_DIR / "file_watcher_service.py")])
@@ -75,6 +79,8 @@ def show_logs(service="all"):
         subprocess.run(["tail", "-f", str(log_dir / "api.log")])
     elif service == "telegram":
         subprocess.run(["tail", "-f", str(log_dir / "telegram_bot.log")])
+    elif service == "telegram-scraper":
+        subprocess.run(["tail", "-f", str(log_dir / "telegram_scraper.log")])
     elif service == "file-watcher":
         subprocess.run(["tail", "-f", str(log_dir / "file_watcher.log")])
     elif service == "wallet-checker":
@@ -100,6 +106,7 @@ def show_status():
         "Service Manager": "service_manager.py",
         "API Server": "api_service.py",
         "Telegram Bot": "telegram_service.py",
+        "Telegram Scraper": "telegram_scraper_service.py",
         "File Watcher": "file_watcher_service.py",
         "Wallet Checker": "wallet_checker_service.py",
     }

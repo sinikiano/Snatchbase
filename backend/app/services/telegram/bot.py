@@ -13,6 +13,10 @@ from .callbacks import button_callback
 from .search import search_command
 from .analytics import stats_command, recent_command
 from .wallet_commands import wallets_command, checkwallets_command, highvalue_command, checkbalances_command
+from .password_commands import (
+    pending_command, unlock_command, trypasswords_command, 
+    addpassword_command, handle_unlock_callback
+)
 
 
 def main():
@@ -48,7 +52,14 @@ def main():
     application.add_handler(CommandHandler("topdomains", top100_command))  # Alias for top100
     application.add_handler(CommandHandler("extractdomains", extractdomains_command))
     
-    # Add callback query handler for buttons
+    # Password-protected archive commands
+    application.add_handler(CommandHandler("pending", pending_command))
+    application.add_handler(CommandHandler("unlock", unlock_command))
+    application.add_handler(CommandHandler("trypasswords", trypasswords_command))
+    application.add_handler(CommandHandler("addpassword", addpassword_command))
+    
+    # Add callback query handler for buttons (unlock callbacks have higher priority)
+    application.add_handler(CallbackQueryHandler(handle_unlock_callback, pattern=r"^(unlock_|trycommon_|pending_list)"))
     application.add_handler(CallbackQueryHandler(button_callback))
     
     # Add message handlers
