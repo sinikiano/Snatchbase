@@ -227,12 +227,12 @@ export const fetchDeviceCreditCards = async (
 }
 
 export const fetchCreditCardStats = async (): Promise<CreditCardStats> => {
-  const response = await api.get('/api/stats/credit-cards')
+  const response = await api.get('/api/credit-cards/stats')
   return response.data
 }
 
 export const fetchCardBrandStats = async (): Promise<CardBrandStat[]> => {
-  const response = await api.get('/api/stats/credit-card-brands')
+  const response = await api.get('/api/credit-cards/brands')
   return response.data
 }
 

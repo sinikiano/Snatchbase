@@ -2,7 +2,7 @@
 Credit Cards API Router
 Endpoints for credit card data from stealer logs
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -11,6 +11,51 @@ from app.database import get_db
 from app.models import CreditCard, Device
 
 router = APIRouter()
+
+
+@router.get("/credit-cards/stats")
+async def get_credit_card_stats(db: Session = Depends(get_db)):
+    """Get statistics about credit cards"""
+    total_cards = db.query(func.count(CreditCard.id)).scalar()
+    
+    # Count by brand
+    brand_stats = db.query(
+        CreditCard.card_brand,
+        func.count(CreditCard.id).label('count')
+    ).group_by(CreditCard.card_brand).all()
+    
+    # Devices with credit cards
+    devices_with_cc = db.query(func.count(func.distinct(CreditCard.device_id))).scalar()
+    
+    return {
+        "total_credit_cards": total_cards,
+        "devices_with_cards": devices_with_cc,
+        "by_brand": [
+            {"brand": brand, "count": count}
+            for brand, count in brand_stats
+        ]
+    }
+
+
+@router.get("/credit-cards/brands")
+async def get_credit_card_brands(
+    limit: int = Query(20, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get credit card statistics by brand"""
+    brands = db.query(
+        CreditCard.card_brand,
+        func.count(CreditCard.id).label('count')
+    ).group_by(
+        CreditCard.card_brand
+    ).order_by(
+        func.count(CreditCard.id).desc()
+    ).limit(limit).all()
+    
+    return [
+        {"brand": brand, "count": count}
+        for brand, count in brands
+    ]
 
 
 @router.get("/credit-cards")
@@ -117,48 +162,3 @@ async def get_device_credit_cards(
         "limit": limit,
         "offset": offset
     }
-
-
-@router.get("/stats/credit-cards")
-async def get_credit_card_stats(db: Session = Depends(get_db)):
-    """Get statistics about credit cards"""
-    total_cards = db.query(func.count(CreditCard.id)).scalar()
-    
-    # Count by brand
-    brand_stats = db.query(
-        CreditCard.card_brand,
-        func.count(CreditCard.id).label('count')
-    ).group_by(CreditCard.card_brand).all()
-    
-    # Devices with credit cards
-    devices_with_cc = db.query(func.count(func.distinct(CreditCard.device_id))).scalar()
-    
-    return {
-        "total_credit_cards": total_cards,
-        "devices_with_cards": devices_with_cc,
-        "by_brand": [
-            {"brand": brand, "count": count}
-            for brand, count in brand_stats
-        ]
-    }
-
-
-@router.get("/stats/credit-card-brands")
-async def get_credit_card_brands(
-    limit: int = Query(20, le=100),
-    db: Session = Depends(get_db)
-):
-    """Get credit card statistics by brand"""
-    brands = db.query(
-        CreditCard.card_brand,
-        func.count(CreditCard.id).label('count')
-    ).group_by(
-        CreditCard.card_brand
-    ).order_by(
-        func.count(CreditCard.id).desc()
-    ).limit(limit).all()
-    
-    return [
-        {"brand": brand, "count": count}
-        for brand, count in brands
-    ]

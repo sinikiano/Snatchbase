@@ -65,7 +65,7 @@ const CreditCardStats: React.FC = () => {
 
   if (!stats) return null
 
-  const totalCards = stats.total_cards || 0
+  const totalCards = stats.total_credit_cards || 0
   const maxCount = brandStats.length > 0 ? Math.max(...brandStats.map(b => b.count)) : 1
 
   return (
@@ -86,7 +86,7 @@ const CreditCardStats: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Unique Devices</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.unique_devices?.toLocaleString() || 0}</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.devices_with_cards?.toLocaleString() || 0}</p>
             </div>
             <div className="text-4xl">🖥️</div>
           </div>
