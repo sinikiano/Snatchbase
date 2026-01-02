@@ -287,6 +287,43 @@ start_backend() {
     cd "$SCRIPT_DIR"
 }
 
+start_scraper() {
+    print_step "Starting Telegram scraper..."
+    cd "$BACKEND_DIR"
+    
+    source venv/bin/activate
+    
+    # Load environment variables
+    if [ -f ".env" ]; then
+        set -a
+        source <(grep -v '^#' .env | grep -v '^\s*$' | sed 's/\s*#.*//')
+        set +a
+    fi
+    
+    # Check if Telegram is configured
+    if [ -z "$TELEGRAM_API_ID" ] || [ -z "$TELEGRAM_API_HASH" ]; then
+        print_warning "Telegram API not configured. Scraper not started."
+        print_info "Set TELEGRAM_API_ID and TELEGRAM_API_HASH in .env"
+        cd "$SCRIPT_DIR"
+        return 0
+    fi
+    
+    print_info "Starting Telegram auto-scraper..."
+    nohup python3 run_scraper.py > "$LOG_DIR/scraper.log" 2>&1 &
+    SCRAPER_PID=$!
+    echo $SCRAPER_PID > "$LOG_DIR/scraper.pid"
+    
+    sleep 3
+    
+    if kill -0 $SCRAPER_PID 2>/dev/null; then
+        print_success "Scraper started (PID: $SCRAPER_PID)"
+    else
+        print_warning "Scraper may have issues. Check $LOG_DIR/scraper.log"
+    fi
+    
+    cd "$SCRIPT_DIR"
+}
+
 start_frontend() {
     print_step "Starting frontend..."
     cd "$FRONTEND_DIR"
@@ -312,6 +349,16 @@ start_frontend() {
 stop_services() {
     print_step "Stopping all services..."
     
+    # Stop Scraper
+    if [ -f "$LOG_DIR/scraper.pid" ]; then
+        SCRAPER_PID=$(cat "$LOG_DIR/scraper.pid")
+        if kill -0 $SCRAPER_PID 2>/dev/null; then
+            kill $SCRAPER_PID 2>/dev/null
+            print_info "Stopped scraper (PID: $SCRAPER_PID)"
+        fi
+        rm -f "$LOG_DIR/scraper.pid"
+    fi
+    
     # Stop API
     if [ -f "$LOG_DIR/api.pid" ]; then
         API_PID=$(cat "$LOG_DIR/api.pid")
@@ -335,6 +382,7 @@ stop_services() {
     # Kill any remaining processes
     pkill -f "uvicorn app.main:app" 2>/dev/null || true
     pkill -f "vite" 2>/dev/null || true
+    pkill -f "run_scraper.py" 2>/dev/null || true
     
     print_success "All services stopped"
 }
@@ -362,6 +410,16 @@ health_check() {
         FRONTEND_OK=0
     fi
     
+    # Check Scraper
+    echo -n "  Telegram Scraper:     "
+    if [ -f "$LOG_DIR/scraper.pid" ] && kill -0 $(cat "$LOG_DIR/scraper.pid") 2>/dev/null; then
+        echo -e "${GREEN}✓ Running${NC}"
+        SCRAPER_OK=1
+    else
+        echo -e "${YELLOW}○ Not Running${NC}"
+        SCRAPER_OK=0
+    fi
+    
     # Show database stats if backend is running
     if [ "$BACKEND_OK" = "1" ]; then
         echo ""
@@ -379,8 +437,11 @@ show_logs() {
         frontend)
             tail -f "$LOG_DIR/frontend.log"
             ;;
+        scraper)
+            tail -f "$LOG_DIR/scraper.log"
+            ;;
         *)
-            tail -f "$LOG_DIR/api.log" "$LOG_DIR/frontend.log"
+            tail -f "$LOG_DIR/api.log" "$LOG_DIR/frontend.log" "$LOG_DIR/scraper.log" 2>/dev/null
             ;;
     esac
 }
@@ -438,6 +499,13 @@ cmd_start() {
         print_warning "Frontend is already running"
     fi
     
+    # Start scraper if not already running
+    if [ ! -f "$LOG_DIR/scraper.pid" ] || ! kill -0 $(cat "$LOG_DIR/scraper.pid" 2>/dev/null) 2>/dev/null; then
+        start_scraper
+    else
+        print_warning "Scraper is already running"
+    fi
+    
     echo ""
     echo "═══════════════════════════════════════════════════════════"
     echo -e "${GREEN}✨ Snatchbase is running!${NC}"
@@ -485,13 +553,14 @@ cmd_help() {
     echo "  stop        - Stop all services"
     echo "  restart     - Restart all services"
     echo "  status      - Show service status and health check"
-    echo "  logs [svc]  - View logs (api, frontend, or all)"
+    echo "  logs [svc]  - View logs (api, frontend, scraper, or all)"
     echo "  help        - Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./start.sh              # Same as ./start.sh start"
     echo "  ./start.sh install      # Full installation"
     echo "  ./start.sh logs api     # View API logs"
+    echo "  ./start.sh logs scraper # View scraper logs"
     echo ""
 }
 
