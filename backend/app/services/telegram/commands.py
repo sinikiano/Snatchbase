@@ -9,6 +9,9 @@ from app.models import Credential, Device, Upload, CreditCard
 from .config import logger, ALLOWED_USER_ID, UPLOAD_DIR
 from .utils import get_back_button
 
+# Scraper service reference (set by bot.py)
+scraper_service = None
+
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command with comprehensive statistics"""
@@ -67,7 +70,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/trypasswords - Try common passwords\n"
             "/addpassword - Add password to list\n\n"
             
-            "�📤 *SEND FILES*\n"
+            "� *SCRAPER COMMANDS*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "/scraper - Scraper status\n"
+            "/scraperlogs - View scraper logs\n"
+            "/password - Provide archive password\n"
+            "/pendingpw - Files awaiting passwords\n\n"
+            
+            "��📤 *SEND FILES*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "Send me ZIP files or Mega.nz links with logs:\n"
             "✅ Upload ZIP files directly\n"
@@ -331,3 +341,173 @@ async def ccstats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         db.close()
 
+
+# ============================================
+# SCRAPER COMMANDS
+# ============================================
+
+async def scraper_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /scraper command - Show scraper status"""
+    user_id = update.effective_user.id
+    
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("⛔ Unauthorized access denied.")
+        return
+    
+    global scraper_service
+    if scraper_service is None:
+        await update.message.reply_text(
+            "❌ *Scraper Not Running*\n\n"
+            "The auto-scraper service is not active.\n"
+            "Start it with: `/startscraper`",
+            parse_mode='Markdown',
+            reply_markup=get_back_button()
+        )
+        return
+    
+    status = scraper_service.get_status()
+    await update.message.reply_text(status, parse_mode='Markdown', reply_markup=get_back_button())
+
+
+async def scraper_logs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /scraperlogs command - Show recent scraper logs"""
+    user_id = update.effective_user.id
+    
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("⛔ Unauthorized access denied.")
+        return
+    
+    global scraper_service
+    if scraper_service is None:
+        await update.message.reply_text(
+            "❌ *Scraper Not Running*\n\n"
+            "The auto-scraper service is not active.",
+            parse_mode='Markdown',
+            reply_markup=get_back_button()
+        )
+        return
+    
+    # Get log count from args
+    count = 20
+    if context.args:
+        try:
+            count = int(context.args[0])
+            count = min(count, 50)  # Max 50 logs
+        except:
+            pass
+    
+    logs = scraper_service.get_logs(count)
+    await update.message.reply_text(logs, parse_mode='Markdown', reply_markup=get_back_button())
+
+
+async def password_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /password command - Provide password for protected archive"""
+    user_id = update.effective_user.id
+    
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("⛔ Unauthorized access denied.")
+        return
+    
+    global scraper_service
+    if scraper_service is None:
+        await update.message.reply_text(
+            "❌ *Scraper Not Running*",
+            parse_mode='Markdown',
+            reply_markup=get_back_button()
+        )
+        return
+    
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ *Usage:*\n"
+            "`/password filename.rar YOUR_PASSWORD`\n\n"
+            "Example:\n"
+            "`/password logs.rar secret123`",
+            parse_mode='Markdown',
+            reply_markup=get_back_button()
+        )
+        return
+    
+    filename = context.args[0]
+    password = ' '.join(context.args[1:])
+    
+    result = await scraper_service.provide_password(filename, password)
+    await update.message.reply_text(result, parse_mode='Markdown', reply_markup=get_back_button())
+
+
+async def pending_passwords_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /pendingpasswords command - List files awaiting passwords"""
+    user_id = update.effective_user.id
+    
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("⛔ Unauthorized access denied.")
+        return
+    
+    global scraper_service
+    if scraper_service is None:
+        await update.message.reply_text(
+            "❌ *Scraper Not Running*",
+            parse_mode='Markdown',
+            reply_markup=get_back_button()
+        )
+        return
+    
+    pending = scraper_service.pending_passwords
+    
+    if not pending:
+        await update.message.reply_text(
+            "✅ *No Pending Passwords*\n\n"
+            "All archives have been processed.",
+            parse_mode='Markdown',
+            reply_markup=get_back_button()
+        )
+        return
+    
+    message = "🔒 *Files Awaiting Password:*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    
+    for filename, task in pending.items():
+        message += f"📁 `{filename}`\n"
+        message += f"   Size: {task.size_mb:.1f}MB\n"
+        message += f"   Added: {task.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
+    
+    message += "\n💡 Provide password with:\n`/password filename.rar PASSWORD`"
+    
+    await update.message.reply_text(message, parse_mode='Markdown', reply_markup=get_back_button())
+
+
+async def daily_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /dailycheck command - Check for missing files in channels"""
+    user_id = update.effective_user.id
+    
+    if user_id != ALLOWED_USER_ID:
+        await update.message.reply_text("⛔ Unauthorized access denied.")
+        return
+    
+    global scraper_service
+    if scraper_service is None:
+        await update.message.reply_text(
+            "❌ *Scraper Not Running*\n\n"
+            "Start the scraper first with: `./start.sh scraper start`",
+            parse_mode='Markdown',
+            reply_markup=get_back_button()
+        )
+        return
+    
+    await update.message.reply_text(
+        "🔍 *Starting Daily Check...*\n\n"
+        "Scanning all channels for missing files...",
+        parse_mode='Markdown'
+    )
+    
+    try:
+        result = await scraper_service.daily_check()
+        # Result is already sent via bot notification, just confirm completion
+        await update.message.reply_text(
+            "✅ Daily check completed!",
+            reply_markup=get_back_button()
+        )
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Error during daily check: {e}",
+            reply_markup=get_back_button()
+        )

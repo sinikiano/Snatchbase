@@ -122,7 +122,7 @@ export default function SearchNew() {
       params.append('limit', '10000') // Export up to 10k results
       
       // Fetch from export endpoint
-      const response = await fetch(`http://localhost:8000/search/export?${params.toString()}`)
+      const response = await fetch(`http://localhost:8000/api/search/export?${params.toString()}`)
       if (!response.ok) throw new Error('Export failed')
       
       const blob = await response.blob()

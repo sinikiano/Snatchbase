@@ -53,6 +53,13 @@ class ZipFileHandler(FileSystemEventHandler):
                 self.logger.info(f"   - Devices processed: {result['devices_processed']}")
                 self.logger.info(f"   - Credentials: {result['total_credentials']}")
                 self.logger.info(f"   - Files: {result['total_files']}")
+                
+                # Delete ZIP file after successful processing to save disk space
+                try:
+                    file_path.unlink()
+                    self.logger.info(f"🗑️ Deleted processed file: {file_path}")
+                except Exception as del_err:
+                    self.logger.warning(f"⚠️ Could not delete file {file_path}: {del_err}")
             finally:
                 db.close()
         except Exception as e:
@@ -116,6 +123,13 @@ class FileWatcherService:
                     self.logger.info(f"✅ Successfully processed: {zip_path}")
                     self.logger.info(f"   - Devices processed: {result['devices_processed']}")
                     self.logger.info(f"   - Credentials: {result['total_credentials']}")
+                    
+                    # Delete ZIP file after successful processing to save disk space
+                    try:
+                        zip_path.unlink()
+                        self.logger.info(f"🗑️ Deleted processed file: {zip_path}")
+                    except Exception as del_err:
+                        self.logger.warning(f"⚠️ Could not delete file {zip_path}: {del_err}")
                 finally:
                     db.close()
             except Exception as e:
